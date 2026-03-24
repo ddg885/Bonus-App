@@ -4,7 +4,7 @@ import { metricCards } from '../components/cards.js';
 
 export function transformationPage(state) {
   return `
-    <h2>Data Transformation Engine</h2>
+    <div class="page-header"><div><h2>Data Transformation Engine</h2><p>Transformation outputs and validation diagnostics based on current source data.</p></div></div>
     ${metricCards([
       { label: 'Output Rows', value: state.transformed.length },
       { label: 'Source Rows', value: state.execution.length },

@@ -32,7 +32,7 @@ export function payoutWaterfallPage(state) {
   }, {})).map((r) => ({ ...r, amount: Number(r.amount.toFixed(2)) }));
 
   return `
-    <h2>Payout Waterfall</h2>
+    <div class="page-header"><div><h2>Payout Waterfall</h2><p>Grouped payout stream with configurable dimensions and export-ready tabular detail.</p></div></div>
     <section class="panel"><h3>Filters</h3><div class="filter-grid">
       <label>Category<select multiple data-waterfall-filter="category">${options(uniq(base, 'category'), f.category)}</select></label>
       <label>Budget Line Item<select multiple data-waterfall-filter="budgetLineItem">${options(uniq(base, 'budgetLineItem'), f.budgetLineItem)}</select></label>

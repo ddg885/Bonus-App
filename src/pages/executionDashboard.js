@@ -28,6 +28,7 @@ function applyFilters(rows, f = {}) {
       && inSet('category', r.category)
       && inSet('budgetLineItem', r.budgetLineItem)
       && inSet('oe', r.oe)
+      && inSet('bonusType', r.bonusType)
       && inSet('payoutFy', r.payoutFy)
       && inSet('payoutType', r.payoutType);
   });
@@ -39,7 +40,7 @@ export function executionDashboardPage(state) {
   const topBli = groupedAmount(filtered, 'budgetLineItem').sort((a, b) => b.value - a.value).slice(0, 10);
 
   return `
-    <h2>Execution Dashboard</h2>
+    <div class="page-header"><div><h2>Execution Dashboard</h2><p>Review transformed execution outcomes with interactive filtering and exports.</p></div></div>
     <section class="panel">
       <h3>Filters</h3>
       <div class="filter-grid">

@@ -39,7 +39,7 @@ export function sortRows(rows, sortKey, sortDir) {
 }
 
 export function interactiveTable({ title, tableId, rows, columns, ui = {}, sticky = false, defaultPageSize = 25, exportName }) {
-  if (!rows.length) return `<section class="panel"><h3>${title}</h3><p class="empty">No data available.</p></section>`;
+  if (!rows.length) return `<section class="panel table-panel"><h3>${title}</h3><p class="empty">No data available.</p></section>`;
   const t = tableState(ui, columns, rows.length, defaultPageSize);
   const sorted = sortRows(rows, t.sortKey, t.sortDir);
   const start = (Math.min(t.page, t.totalPages) - 1) * t.pageSize;
@@ -50,15 +50,15 @@ export function interactiveTable({ title, tableId, rows, columns, ui = {}, stick
   const header = visibleColumns.map((c) => `<th><button class="th-sort" data-table-sort="${tableId}" data-key="${c.key}">${c.label}${t.sortKey === c.key ? (t.sortDir === 'asc' ? ' ▲' : ' ▼') : ''}</button></th>`).join('');
   const body = paged.map((r) => `<tr>${visibleColumns.map((c) => `<td>${fmt(r[c.key])}</td>`).join('')}</tr>`).join('');
 
-  return `<section class="panel">
+  return `<section class="panel table-panel">
     <h3>${title}</h3>
     <div class="table-toolbar">
-      <button data-table-export="${tableId}">Export CSV</button>
+      <button class="secondary-btn" data-table-export="${tableId}">Export CSV</button>
       <label>Page size <select data-table-pagesize="${tableId}">${[10, 25, 50, 100].map((n) => `<option value="${n}" ${n === t.pageSize ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
       <label>Page <input data-table-page="${tableId}" type="number" min="1" max="${t.totalPages}" value="${Math.min(t.page, t.totalPages)}"/></label>
       <details><summary>Columns</summary><div class="col-toggle-list">${colToggles}</div></details>
     </div>
-    <div class="table-wrap ${sticky ? 'sticky' : ''}"><table><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>
+    <div class="table-wrap ${sticky ? 'sticky' : ''}"><table class="data-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>
     <p class="muted">Showing ${paged.length} of ${rows.length} rows.</p>
     <script type="application/json" id="table-data-${tableId}">${JSON.stringify(sorted)}</script>
     <script type="application/json" id="table-export-${tableId}">${JSON.stringify(exportName || `${tableId}.csv`)}</script>
