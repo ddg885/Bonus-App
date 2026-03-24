@@ -1,54 +1,39 @@
 # Bonus Ecosystem App
 
-A front-end analytics MVP for Navy Reserve-style bonus incentive analysis covering execution history, transformation to payout schedules, POM projections, and budget reconciliation.
+A static-hostable single-page application for bonus execution analysis, transformation to payout schedules, POM planning projections, budget reconciliation, and QA administration.
 
-## Tech Stack
-- Browser-first SPA using modular JavaScript (ESM), HTML, CSS
-- Node.js scripts for local dev server, build copy, lint, and tests
-- No backend required; persistence via `localStorage`
+## Purpose
+The app lets planners load execution + planning datasets, normalize/map records through a crosswalk, project future payouts with a two-pass taker distribution model, compare to budget controls, and export all major outputs.
 
-> Note: This environment blocked package registry access, so this MVP is implemented without external npm dependencies while preserving the requested domain architecture.
+## Tech stack
+- Vanilla JavaScript (ES modules)
+- HTML/CSS SPA with hash routing
+- Node.js scripts for dev/build/test
+- Browser `localStorage` for persistence
 
-## What the app does
-- Historical execution dashboard with summary cards, charts, and detailed table
-- Transformation engine from execution records to payout schedule with traceability
-- POM input management and crosswalk mapping visibility
-- Two-pass taker distribution projection model
-- Budget control reconciliation with over/under flags
-- Payout waterfall grouped view
-- Admin QA checks and rules reference page
-
-## Install
-```bash
-# no dependency install required
-node -v
-```
-
-## Run locally
+## Local run
 ```bash
 npm run dev
 # open http://localhost:4173
 ```
 
-## Build
-```bash
-npm run build
-```
-
-## Test
+## Test and build
 ```bash
 npm test
 npm run lint
+npm run build
 ```
 
-## Sample data walkthrough
-1. Start in **POM Inputs**.
-2. Upload sample CSV files from `sample-data/`.
-3. Move to **Execution Dashboard** for historical analysis.
-4. Open **Data Transformation** to inspect payout schedule traces.
-5. Open **POM Projections** to inspect two-pass distribution and budget variances.
-6. Open **Payout Waterfall** for grouped payout stream views.
+## Sample-data walkthrough
+1. Go to **POM Inputs** and use the built-in loaded sample state (or re-upload files from `sample-data/`).
+2. Review/edit crosswalk + bonus info inline in **POM Inputs**.
+3. Open **Execution Dashboard** for historical filters, cards, charts, and detailed exportable table.
+4. Open **Data Transformation** to inspect normalized payout schedule + validation/errors.
+5. Open **POM Projections** for two-pass distribution, explainability, payout stream, and variance.
+6. Open **Payout Waterfall** for grouped due-date/payout FY table and exports.
+7. Open **Admin / QA** for dataset status, run metadata, reset/demo tools.
 
-## Deployment notes
-- Static-host friendly output in `dist/` from `npm run build`.
-- For GitHub Pages, publish `dist/` contents. Hash routing is used so deep links are static-host safe.
+## Deployment notes (static hosting)
+- Run `npm run build` and deploy the generated `dist/` directory.
+- Hash routing is used, so no server-side route rewrite is required.
+- All data is local/browser-side; no backend dependency.
