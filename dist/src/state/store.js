@@ -4,7 +4,7 @@ import { transformExecutionToPayoutSchedule } from '../core/transformation.js';
 import { buildProjectionFiscalYears, twoPassDistribution } from '../core/projection.js';
 import { calculateBudgetVariance } from '../core/reconciliation.js';
 
-const KEY = 'bonus-ecosystem-state-v1';
+const KEY = 'bonus-ecosystem-state-v2';
 
 const initialState = {
   bonusInfo: seedBonusInfo,
@@ -14,8 +14,14 @@ const initialState = {
   crosswalk: seedCrosswalk,
   execution: seedExecution,
   transformed: [],
+  transformedIssues: [],
   projections: [],
+  projectionPayoutSchedule: [],
+  projectionExplainability: [],
   variances: [],
+  runMeta: { transformedAt: null, projectedAt: null },
+  settings: { fyStartMonth: 10 },
+  ui: { tables: {}, dashboard: { filters: {} }, waterfall: { filters: {} } },
   inputStatus: {
     execution: true,
     bonusInfo: true,
@@ -28,15 +34,27 @@ const initialState = {
 
 function computeDerived(state) {
   const mapped = applyCrosswalk(state.execution, state.crosswalk);
-  const transformed = transformExecutionToPayoutSchedule(mapped);
-  const projections = twoPassDistribution({
+  const transformResult = transformExecutionToPayoutSchedule(mapped, state.settings?.fyStartMonth || 10);
+  const projectionResult = twoPassDistribution({
     aggregateRows: state.aggregateTakers,
     bonusInfoRows: state.bonusInfo,
     targetRows: state.targetAverage,
-    fiscalYears: buildProjectionFiscalYears('FY2026', 'FY2028')
+    fiscalYears: buildProjectionFiscalYears('FY2026', 'FY2032')
   });
-  const variances = calculateBudgetVariance(projections, state.controls);
-  return { ...state, transformed, projections, variances };
+  const variances = calculateBudgetVariance(projectionResult.projections, state.controls);
+  return {
+    ...state,
+    transformed: transformResult.rows,
+    transformedIssues: transformResult.issues,
+    projections: projectionResult.projections,
+    projectionPayoutSchedule: projectionResult.payoutSchedule,
+    projectionExplainability: projectionResult.explainability,
+    variances,
+    runMeta: {
+      transformedAt: new Date().toISOString(),
+      projectedAt: new Date().toISOString()
+    }
+  };
 }
 
 function load() {
@@ -57,6 +75,17 @@ export const store = {
   set(partial) {
     this.state = computeDerived({ ...this.state, ...partial });
     localStorage.setItem(KEY, JSON.stringify(this.state));
+    this.listeners.forEach((fn) => fn(this.state));
+  },
+  patchUi(nextUi) {
+    this.set({ ui: { ...this.state.ui, ...nextUi } });
+  },
+  resetDemo() {
+    this.set(initialState);
+  },
+  clearStorage() {
+    localStorage.removeItem(KEY);
+    this.state = computeDerived(initialState);
     this.listeners.forEach((fn) => fn(this.state));
   }
 };
