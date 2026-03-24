@@ -2,7 +2,7 @@ export const routes = [
   'Overview',
   'Execution Dashboard',
   'Data Transformation',
-  'POM Inputs',
+  'Inputs and Planning Tables',
   'POM Projections',
   'Payout Waterfall',
   'Data Dictionary / Rules',
