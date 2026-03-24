@@ -1,6 +1,6 @@
 export function rulesPage(state) {
   return `
-    <h2>Data Dictionary / Rules</h2>
+    <div class="page-header"><div><h2>Data Dictionary / Rules</h2><p>Reference assumptions, data expectations, and rule processing order.</p></div></div>
     <section class="panel"><h3>Expected datasets</h3><ul>
       <li>Execution / approvals: DoDID, type code, effective date, installments, amount, approval flag/status.</li>
       <li>Bonus info: Budget Line Item, Category, O/E, Bonus Type, Tier, Amount, Payout, Term, Installments, Initial %, Anniversary %.</li>

@@ -1,5 +1,6 @@
 import { interactiveTable } from '../components/table.js';
 import { uploadZone } from '../components/uploadZone.js';
+import { statusBadge } from '../components/cards.js';
 
 const datasets = [
   ['execution', 'Execution / Approval Data'],
@@ -10,23 +11,19 @@ const datasets = [
   ['crosswalk', 'Crosswalk Table']
 ];
 
-function statusBadge(loaded) {
-  return loaded ? '<span class="ok">Loaded</span>' : '<span class="warn">Missing</span>';
-}
-
 function editableMiniTable(state, key, title, columns) {
   const rows = (state[key] || []).slice(0, 20);
   if (!rows.length) return `<section class="panel"><h3>${title}</h3><p class="empty">No rows loaded.</p></section>`;
   const head = columns.map((c) => `<th>${c.label}</th>`).join('');
   const body = rows.map((r, idx) => `<tr>${columns.map((c) => `<td contenteditable="true" data-edit-cell="${key}" data-row="${idx}" data-col="${c.key}">${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('');
-  return `<section class="panel"><h3>${title} <small>(inline editable sample)</small></h3><p class="muted">Editing persists locally. For bulk updates, import CSV.</p><div class="table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></section>`;
+  return `<section class="panel"><h3>${title} <small>(inline editable sample)</small></h3><p class="muted">Editing persists locally. For bulk updates, import CSV.</p><div class="table-wrap"><table class="data-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></section>`;
 }
 
 export function pomInputsPage(state) {
   const status = state.inputStatus;
   return `
-    <h2>POM Inputs and Editable Planning Tables</h2>
-    <section class="panel"><h3>Dataset Status</h3><div class="dataset-status">${datasets.map(([k, label]) => `<div><strong>${label}</strong> ${statusBadge(status[k])} <button data-export-dataset="${k}">Export</button></div>`).join('')}</div></section>
+    <div class="page-header"><div><h2>POM Inputs and Editable Planning Tables</h2><p>Manage source datasets while preserving current parsing, validation, and transformation behavior.</p></div></div>
+    <section class="panel"><h3>Dataset Status</h3><div class="dataset-status">${datasets.map(([k, label]) => `<div><strong>${label}</strong> ${statusBadge(status[k] ? 'Loaded' : 'Missing', status[k] ? 'positive' : 'warning')} <button class="secondary-btn" data-export-dataset="${k}">Export</button></div>`).join('')}</div></section>
     <div class="grid-three">${datasets.map(([k, label]) => uploadZone(k, label, status[k])).join('')}</div>
     ${editableMiniTable(state, 'bonusInfo', 'Bonus Info', [
       { key: 'budgetLineItem', label: 'BLI' }, { key: 'category', label: 'Category' }, { key: 'oe', label: 'O/E' }, { key: 'bonusType', label: 'Bonus Type' }, { key: 'amount', label: 'Amount' }, { key: 'installments', label: 'Installments' }, { key: 'initialPaymentPct', label: 'Initial %' }, { key: 'anniversaryPaymentPct', label: 'Anniversary %' }

@@ -13,8 +13,8 @@ export function adminQaPage(state) {
   ];
 
   return `
-    <h2>Admin / QA</h2>
-    <section class="panel"><h3>Actions</h3><div class="button-row"><button data-admin-action="load-demo">Load Demo Data</button><button data-admin-action="clear-storage">Clear Local Storage</button></div></section>
+    <div class="page-header"><div><h2>Admin / QA</h2><p>Operational controls and validation checkpoints for local runs.</p></div></div>
+    <section class="panel"><h3>Actions</h3><div class="button-row"><button class="secondary-btn" data-admin-action="load-demo">Load Demo Data</button><button class="secondary-btn danger-btn" data-admin-action="clear-storage">Clear Local Storage</button></div></section>
     ${interactiveTable({ title: 'Loaded Dataset Summary', tableId: 'qa-datasets', rows, ui: state.ui.tables?.['qa-datasets'], columns: [{ key: 'dataset', label: 'Dataset' }, { key: 'loaded', label: 'Loaded' }, { key: 'rows', label: 'Rows' }] })}
     ${interactiveTable({ title: 'Validation Issues', tableId: 'qa-issues', rows: state.transformedIssues, ui: state.ui.tables?.['qa-issues'], columns: [{ key: 'sourceId', label: 'Source' }, { key: 'severity', label: 'Severity' }, { key: 'message', label: 'Message' }] })}
     ${interactiveTable({ title: 'System Checks', tableId: 'qa-checks', rows: checks, ui: state.ui.tables?.['qa-checks'], columns: [{ key: 'check', label: 'Check' }, { key: 'result', label: 'Result' }] })}

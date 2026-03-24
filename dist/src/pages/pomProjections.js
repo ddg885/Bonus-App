@@ -12,7 +12,7 @@ function group(rows, key, valueKey) {
 export function pomProjectionsPage(state) {
   const streamByFy = group(state.projectionPayoutSchedule, 'payoutFy', 'amount');
   return `
-    <h2>POM Projections</h2>
+    <div class="page-header"><div><h2>POM Projections</h2><p>Projected distributions, payout schedule shape, and control variance visibility.</p></div></div>
     ${metricCards([
       { label: 'Projection Rows', value: state.projections.length },
       { label: 'Payout Schedule Rows', value: state.projectionPayoutSchedule.length },
