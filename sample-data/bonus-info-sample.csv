@@ -1,0 +1,4 @@
+Budget Line Item,Category,O/E,Bonus Type,Tier,Amount,Payout,Term,Installments,Initial Payment %,Anniversary Payment %
+PS,Affiliation,E,Prior Svc SELRES,T1,20000,Installment,4,4,50,16.67
+NAT,Accession,E,EB SELRES,T1,15000,Lump Sum,3,1,100,0
+DCO,Accession,O,Officer Affiliation/Accession,T2,25000,Installment,4,4,40,20

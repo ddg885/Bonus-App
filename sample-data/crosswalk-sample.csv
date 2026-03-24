@@ -1,0 +1,7 @@
+id,matchField,matchValue,category,budgetLineItem,oe,bonusType,priority
+cw-1,rawTypeCode,EAB,Affiliation,PS,E,Prior Svc SELRES,1
+cw-2,rawTypeCode,ENB,Affiliation,PS,E,Prior Svc SELRES,2
+cw-3,rawTypeCode,NAT,Accession,NAT,E,EB SELRES,3
+cw-4,rawTypeCode,OAC,Accession,DCO,O,Officer Affiliation/Accession,4
+cw-5,rawTypeCode,OAF,Affiliation,NAVET,O,Officer Affiliation/Accession,5
+cw-6,rawTypeCode,REENL,Retention,REENL,E,SRB SELRES retention,6
