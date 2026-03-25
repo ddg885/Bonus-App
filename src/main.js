@@ -13,6 +13,8 @@ import { parseCSV, toCSV } from './utils/csv.js';
 import { findFiscalYearColumns, normalizeRowHeaders } from './utils/headerNormalization.js';
 import { validateRequiredColumns } from './utils/validation.js';
 import { parsePlanningWorkbook } from './utils/workbook.js';
+import { applyCrosswalk } from './core/crosswalk.js';
+import { transformExecutionToPayoutSchedule } from './core/transformation.js';
 
 const app = document.getElementById('app');
 const INPUTS_ROUTE = 'Inputs and Planning Tables';
@@ -166,6 +168,70 @@ function bindUploadHandlers() {
       }
       applyUpload(datasetKey, mergedRows);
       toolbarInput.value = '';
+    });
+  }
+}
+
+
+function bindExecutionDashboardActions() {
+  const uploadInput = document.getElementById('execution-dashboard-upload');
+  if (uploadInput) {
+    uploadInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const rows = parseCSV(await file.text()).map(normalizeRowHeaders);
+      const validation = validateRequiredColumns(rows, required.execution || []);
+      if (!validation.valid) {
+        store.patchUi({
+          executionDashboard: {
+            fileName: file.name,
+            rawRows: [],
+            transformedRows: [],
+            issues: validation.errors,
+            hasTransformed: false
+          },
+          dashboard: { filters: {} }
+        });
+        return;
+      }
+      store.patchUi({
+        executionDashboard: {
+          fileName: file.name,
+          rawRows: rows,
+          transformedRows: [],
+          issues: [],
+          hasTransformed: false
+        },
+        dashboard: { filters: {} }
+      });
+      uploadInput.value = '';
+    });
+  }
+
+  const transformBtn = document.getElementById('execution-transform-btn');
+  if (transformBtn) {
+    transformBtn.addEventListener('click', () => {
+      const dashboardState = store.state.ui?.executionDashboard || {};
+      const rawRows = dashboardState.rawRows || [];
+      if (!rawRows.length) return;
+      const mapped = applyCrosswalk(rawRows, store.state.crosswalk || []);
+      const result = transformExecutionToPayoutSchedule(mapped, store.state.settings?.fyStartMonth || 10);
+      store.patchUi({
+        executionDashboard: {
+          ...dashboardState,
+          transformedRows: result.rows,
+          issues: result.issues || [],
+          hasTransformed: true,
+          transformedAt: new Date().toISOString()
+        }
+      });
+    });
+  }
+
+  const clearFiltersBtn = document.getElementById('dashboard-clear-filters');
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener('click', () => {
+      store.patchUi({ dashboard: { filters: {} } });
     });
   }
 }
@@ -327,6 +393,7 @@ function render() {
   const fn = pageMap[route] || overviewPage;
   app.innerHTML = renderLayout(route, fn(store.state), store.state);
   bindUploadHandlers();
+  bindExecutionDashboardActions();
   bindDashboardFilters();
   bindWaterfallFilters();
   bindInlineEdits();

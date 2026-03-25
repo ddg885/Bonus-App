@@ -1,7 +1,6 @@
 import { statusBadge } from '../components/cards.js';
 
 const datasets = [
-  ['execution', 'Execution / Approval Data'],
   ['bonusInfo', 'Bonus Info Table'],
   ['targetAverage', 'Target Average Initial Bonus Table'],
   ['controls', 'Controls Table'],
@@ -62,14 +61,8 @@ export function pomInputsPage(state) {
       <p class="muted">Workbook uploads replace only the working tables on this page after full validation.</p>
     </section>
     <section class="panel"><h3>Dataset Status</h3><div class="dataset-status">${datasets.map(([k, label]) => `<div><strong>${label}</strong> ${statusBadge(status[k] ? 'Loaded' : 'Missing', status[k] ? 'positive' : 'warning')} <button class="secondary-btn" data-export-dataset="${k}">Export</button></div>`).join('')}</div></section>
-    ${editableTable(state, 'execution', 'Execution / Approval Data', [
-      { key: 'dodid', label: 'DoD ID' },
-      { key: 'effectiveDate', label: 'Effective Date' },
-      { key: 'grade', label: 'Grade' },
-      { key: 'command', label: 'Command' },
-      { key: 'baseSalary', label: 'Base Salary' }
-    ])}
     ${editableTable(state, 'bonusInfo', 'Bonus Info Table', [
+
       { key: 'budgetLineItem', label: 'BLI' }, { key: 'category', label: 'Category' }, { key: 'oe', label: 'O/E' }, { key: 'bonusType', label: 'Bonus Type' }, { key: 'amount', label: 'Amount' }, { key: 'installments', label: 'Installments' }, { key: 'initialPaymentPct', label: 'Initial %' }, { key: 'anniversaryPaymentPct', label: 'Anniversary %' }
     ])}
     ${editableTable(state, 'targetAverage', 'Target Average Initial Bonus Table', [
