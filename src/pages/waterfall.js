@@ -21,18 +21,35 @@ export function payoutWaterfallPage(state) {
   const base = state.projectionPayoutSchedule;
   const f = state.ui.waterfall?.filters || {};
   const filtered = apply(base, f);
-  const grouped = Object.values(filtered.reduce((acc, r) => {
-    const key = [r.dueDateFy, r.payoutFy, r.payoutType, r.category, r.budgetLineItem, r.oe].join('|');
-    if (!acc[key]) {
-      acc[key] = { dueDateFy: r.dueDateFy, payoutFy: r.payoutFy, payoutType: r.payoutType, category: r.category, budgetLineItem: r.budgetLineItem, oe: r.oe, takers: 0, amount: 0 };
-    }
-    acc[key].takers += Number(r.takers || 0);
-    acc[key].amount += Number(r.amount || 0);
+  const payoutFys = uniq(filtered, 'payoutFy');
+  const matrixRows = Object.values(filtered.reduce((acc, r) => {
+    const rowKey = [r.dueDateFy, r.payoutType].join('|');
+    if (!acc[rowKey]) acc[rowKey] = { dueDateFy: r.dueDateFy, payoutType: r.payoutType };
+    const fy = r.payoutFy;
+    const takersKey = `${fy}_takers`;
+    const amountKey = `${fy}_amount`;
+    acc[rowKey][takersKey] = Number(acc[rowKey][takersKey] || 0) + Number(r.takers || 0);
+    acc[rowKey][amountKey] = Number(acc[rowKey][amountKey] || 0) + Number(r.amount || 0);
     return acc;
-  }, {})).map((r) => ({ ...r, amount: Number(r.amount.toFixed(2)) }));
+  }, {})).map((row) => {
+    payoutFys.forEach((fy) => {
+      const amountKey = `${fy}_amount`;
+      row[`${fy}_takers`] = Number(row[`${fy}_takers`] || 0);
+      row[amountKey] = Number((row[amountKey] || 0).toFixed(2));
+    });
+    return row;
+  });
+  const matrixColumns = [
+    { key: 'dueDateFy', label: 'Due Date FY' },
+    { key: 'payoutType', label: 'Payout Type' },
+    ...payoutFys.flatMap((fy) => ([
+      { key: `${fy}_takers`, label: `${fy} Takers` },
+      { key: `${fy}_amount`, label: `${fy} Amount` }
+    ]))
+  ];
 
   return `
-    <div class="page-header"><div><h2>Payout Waterfall</h2><p>Grouped payout stream with configurable dimensions and export-ready tabular detail.</p></div></div>
+    <div class="page-header"><div><h2>Payout Waterfall</h2><p>Matrix payout view by Due Date FY and Payout Type, pivoted across Payout FY with export-ready tabular detail.</p></div></div>
     <section class="panel"><h3>Filters</h3><div class="filter-grid">
       <label>Category<select multiple data-waterfall-filter="category">${options(uniq(base, 'category'), f.category)}</select></label>
       <label>Budget Line Item<select multiple data-waterfall-filter="budgetLineItem">${options(uniq(base, 'budgetLineItem'), f.budgetLineItem)}</select></label>
@@ -41,22 +58,13 @@ export function payoutWaterfallPage(state) {
       <label>Payout Type<select multiple data-waterfall-filter="payoutType">${options(uniq(base, 'payoutType'), f.payoutType)}</select></label>
     </div></section>
     ${interactiveTable({
-      title: 'Grouped Waterfall Table',
-      tableId: 'waterfall-grouped',
-      rows: grouped,
-      exportName: 'waterfall-grouped.csv',
-      ui: state.ui.tables?.['waterfall-grouped'],
+      title: 'Waterfall Matrix Table',
+      tableId: 'waterfall-matrix',
+      rows: matrixRows,
+      exportName: 'waterfall-matrix.csv',
+      ui: state.ui.tables?.['waterfall-matrix'],
       sticky: true,
-      columns: [
-        { key: 'dueDateFy', label: 'Due Date FY' },
-        { key: 'payoutFy', label: 'Payout FY' },
-        { key: 'payoutType', label: 'Payout Type' },
-        { key: 'category', label: 'Category' },
-        { key: 'budgetLineItem', label: 'BLI' },
-        { key: 'oe', label: 'O/E' },
-        { key: 'takers', label: 'Sum of Takers' },
-        { key: 'amount', label: 'Sum of Amount' }
-      ]
+      columns: matrixColumns
     })}
   `;
 }
