@@ -375,48 +375,6 @@ function bindDatasetExports() {
   });
 }
 
-function bindShellActions() {
-  const filterKeyMap = {
-    'fy-filter': 'payoutFy',
-    'category-filter': 'category',
-    'oe-filter': 'oe',
-    'bonus-type-filter': 'bonusType',
-    'status-filter': 'status'
-  };
-
-  Object.entries(filterKeyMap).forEach(([id, key]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('change', () => {
-      const value = el.value;
-      const globalFilters = { ...(store.state.ui.globalFilters || {}), [key]: value };
-      const dashboardFilters = { ...(store.state.ui.dashboard?.filters || {}), [key]: value ? [value] : [] };
-      const waterfallFilters = { ...(store.state.ui.waterfall?.filters || {}) };
-      if (['category', 'oe', 'payoutFy'].includes(key)) waterfallFilters[key] = value ? [value] : [];
-      store.patchUi({ globalFilters, dashboard: { filters: dashboardFilters }, waterfall: { filters: waterfallFilters } });
-    });
-  });
-
-  document.getElementById('rebuild-model-btn')?.addEventListener('click', () => {
-    store.set({});
-  });
-
-  document.getElementById('clear-state-btn')?.addEventListener('click', () => {
-    store.clearStorage();
-  });
-
-  document.getElementById('load-samples-btn')?.addEventListener('click', () => {
-    store.resetDemo();
-  });
-
-  document.getElementById('export-view-btn')?.addEventListener('click', () => {
-    const route = currentRoute();
-    const filename = `${route.toLowerCase().replace(/\s+/g, '-')}-view.csv`;
-    const rows = route === 'Execution Dashboard' ? store.state.transformed : route === 'Payout Waterfall' ? store.state.projectionPayoutSchedule : store.state.projections;
-    triggerDownload(filename, toCSV(rows));
-  });
-}
-
 function bindTableHandlers() {
   bindInteractiveTables({
     uiTables: store.state.ui.tables || {},
@@ -430,7 +388,7 @@ function bindTableHandlers() {
 function render() {
   const route = currentRoute();
   const fn = pageMap[route] || overviewPage;
-  app.innerHTML = renderLayout(route, fn(store.state), store.state);
+  app.innerHTML = renderLayout(route, fn(store.state));
   bindUploadHandlers();
   bindExecutionDashboardActions();
   bindDashboardFilters();
@@ -439,7 +397,6 @@ function render() {
   bindPomInputsActions();
   bindAdminActions();
   bindDatasetExports();
-  bindShellActions();
   bindTableHandlers();
 }
 
