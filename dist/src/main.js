@@ -12,14 +12,19 @@ import { adminQaPage } from './pages/adminQa.js';
 import { parseCSV, toCSV } from './utils/csv.js';
 import { findFiscalYearColumns, normalizeRowHeaders } from './utils/headerNormalization.js';
 import { validateRequiredColumns } from './utils/validation.js';
+import { parsePlanningWorkbook } from './utils/workbook.js';
+import { applyCrosswalk } from './core/crosswalk.js';
+import { transformExecutionToPayoutSchedule } from './core/transformation.js';
 
 const app = document.getElementById('app');
+const INPUTS_ROUTE = 'Inputs and Planning Tables';
+const DATASET_KEYS = ['execution', 'bonusInfo', 'targetAverage', 'controls', 'aggregateTakers', 'crosswalk'];
 
 const pageMap = {
   Overview: overviewPage,
   'Execution Dashboard': executionDashboardPage,
   'Data Transformation': transformationPage,
-  'POM Inputs': pomInputsPage,
+  [INPUTS_ROUTE]: pomInputsPage,
   'POM Projections': pomProjectionsPage,
   'Payout Waterfall': payoutWaterfallPage,
   'Data Dictionary / Rules': rulesPage,
@@ -78,15 +83,51 @@ function reshapeRows(datasetKey, rows) {
   return rows.map((r, idx) => ({ ...r, sourceId: r.sourceId || `${datasetKey}-${idx + 1}` }));
 }
 
-function applyUpload(datasetKey, rows) {
+function validateAndCastDataset(datasetKey, rows) {
   const normalized = rows.map(normalizeRowHeaders);
   const check = validateRequiredColumns(normalized, required[datasetKey] || []);
-  if (!check.valid) {
-    alert(`Validation failed for ${datasetKey}:\n${check.errors.join('\n')}`);
+  if (!check.valid) return { valid: false, errors: check.errors };
+  return { valid: true, rows: reshapeRows(datasetKey, normalized) };
+}
+
+function setPomInputsNotice(type, message) {
+  store.patchUi({ pomInputs: { notice: { type, message, at: Date.now() } } });
+}
+
+function applyUpload(datasetKey, rows) {
+  const casted = validateAndCastDataset(datasetKey, rows);
+  if (!casted.valid) {
+    setPomInputsNotice('error', `Validation failed for ${datasetKey}: ${casted.errors.join('; ')}`);
     return;
   }
-  const casted = reshapeRows(datasetKey, normalized);
-  store.set({ [datasetKey]: casted, inputStatus: { ...store.state.inputStatus, [datasetKey]: true } });
+  store.updateWorkingDataset(datasetKey, casted.rows, true);
+  setPomInputsNotice('success', `${datasetKey} loaded into working state.`);
+}
+
+async function applyWorkbookUpload(file) {
+  try {
+    const workbookData = await parsePlanningWorkbook(file);
+    const updates = {};
+    const errors = [];
+    for (const key of DATASET_KEYS) {
+      const casted = validateAndCastDataset(key, workbookData[key] || []);
+      if (!casted.valid) {
+        errors.push(`${key}: ${casted.errors.join(', ')}`);
+        continue;
+      }
+      updates[key] = casted.rows;
+    }
+
+    if (errors.length) {
+      setPomInputsNotice('error', `Workbook validation failed. ${errors.join(' | ')}`);
+      return;
+    }
+
+    store.replaceWorkingInputs(updates, Object.fromEntries(DATASET_KEYS.map((key) => [key, true])));
+    setPomInputsNotice('success', `Workbook '${file.name}' loaded into working state.`);
+  } catch (error) {
+    setPomInputsNotice('error', error?.message || 'Unable to parse workbook.');
+  }
 }
 
 function bindUploadHandlers() {
@@ -94,8 +135,8 @@ function bindUploadHandlers() {
     input.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (file.name.toLowerCase().endsWith('.xlsx')) {
-        alert('XLSX recognized. Convert to CSV for this runtime.');
+      if (file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls')) {
+        setPomInputsNotice('error', 'Use the workbook uploader on Inputs and Planning Tables for Excel files.');
         return;
       }
       const key = input.getAttribute('data-upload');
@@ -116,9 +157,9 @@ function bindUploadHandlers() {
       const files = Array.from(e.target.files || []);
       if (!files.length) return;
       const datasetKey = sourceSelector?.value || store.state.ui?.intakeSource || 'execution';
-      const csvFiles = files.filter((file) => !file.name.toLowerCase().endsWith('.xlsx'));
+      const csvFiles = files.filter((file) => !file.name.toLowerCase().endsWith('.xlsx') && !file.name.toLowerCase().endsWith('.xls'));
       if (!csvFiles.length) {
-        alert('XLSX recognized. Convert to CSV for this runtime.');
+        setPomInputsNotice('error', 'Use the workbook uploader on Inputs and Planning Tables for Excel files.');
         return;
       }
       const mergedRows = [];
@@ -127,6 +168,147 @@ function bindUploadHandlers() {
       }
       applyUpload(datasetKey, mergedRows);
       toolbarInput.value = '';
+    });
+  }
+}
+
+
+function bindExecutionDashboardActions() {
+  const setExecutionDashboardState = (next) => {
+    store.patchUi({
+      executionDashboard: next,
+      dashboard: { filters: {} }
+    });
+  };
+
+  const setRawExecutionRows = (dashboardState, rows, fileName) => {
+    setExecutionDashboardState({
+      ...dashboardState,
+      fileName,
+      rawRows: rows,
+      transformedRows: [],
+      hasTransformed: false,
+      transformedAt: null,
+      issues: []
+    });
+  };
+
+  const setExecutionUploadError = (dashboardState, error, fileName = '') => {
+    setExecutionDashboardState({
+      ...dashboardState,
+      fileName,
+      rawRows: [],
+      transformedRows: [],
+      hasTransformed: false,
+      transformedAt: null,
+      issues: [error]
+    });
+  };
+
+  const normalizeExecutionRow = (row, idx) => {
+    const normalized = normalizeRowHeaders(row);
+    const effectiveDate = normalized.effectiveDate
+      || normalized.installmentDate
+      || normalized.submissionEffectiveDate
+      || '';
+    const installmentAmount = normalized.installmentAmount
+      || normalized.amount
+      || normalized.baseAmount
+      || 0;
+    return {
+      ...normalized,
+      effectiveDate,
+      installmentAmount: Number(installmentAmount || 0),
+      installments: Number(normalized.installments || normalized.installmentNumber || 1) || 1,
+      sourceId: normalized.sourceId || `execution-upload-${idx + 1}`
+    };
+  };
+
+  const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
+
+  const parseExecutionFile = async (file) => {
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith('.csv')) {
+      return parseCSV(await file.text()).map(normalizeExecutionRow);
+    }
+    if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+      const XLSX = window.XLSX;
+      if (!XLSX) throw new Error('Excel parser is unavailable. Refresh the page and try again.');
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: false });
+      const executionSheet = workbook.SheetNames.find((sheetName) => {
+        const normalized = String(sheetName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return ['execution', 'executionapprovaldata', 'executiondata', 'approvaldata'].includes(normalized);
+      }) || workbook.SheetNames[0];
+      const sheet = workbook.Sheets[executionSheet];
+      return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false }).map(normalizeExecutionRow);
+    }
+    throw new Error('Invalid file type. Upload a Bonus Execution CSV or Excel file.');
+  };
+
+  const handleExecutionFileSelected = async (file) => {
+    const dashboardState = store.state.ui?.executionDashboard || {};
+    if (!file) {
+      setExecutionUploadError(dashboardState, 'No file selected. Choose a Bonus Execution file to continue.');
+      return;
+    }
+    try {
+      const rows = await parseExecutionFile(file);
+      const validation = validateExecutionColumns(rows);
+      if (!validation.valid) {
+        setExecutionUploadError(dashboardState, `Validation failed: ${validation.errors.join('; ')}`, file.name);
+        return;
+      }
+      setRawExecutionRows(dashboardState, rows, file.name);
+    } catch (error) {
+      setExecutionUploadError(dashboardState, error?.message || 'Unable to read or parse Bonus Execution file.', file.name);
+    }
+  };
+
+  const handleTransformExecutionData = () => {
+    const dashboardState = store.state.ui?.executionDashboard || {};
+    const rawRows = dashboardState.rawRows || [];
+    if (!rawRows.length) {
+      store.patchUi({
+        executionDashboard: {
+          ...dashboardState,
+          hasTransformed: false,
+          transformedRows: [],
+          issues: ['Upload Bonus Execution data before running transforms.']
+        }
+      });
+      return;
+    }
+    const mapped = applyCrosswalk(rawRows, store.state.crosswalk || []);
+    const result = transformExecutionToPayoutSchedule(mapped, store.state.settings?.fyStartMonth || 10);
+    store.patchUi({
+      executionDashboard: {
+        ...dashboardState,
+        transformedRows: result.rows,
+        issues: result.issues || [],
+        hasTransformed: true,
+        transformedAt: new Date().toISOString()
+      }
+    });
+  };
+
+  const uploadInput = document.getElementById('execution-dashboard-upload');
+  if (uploadInput) {
+    uploadInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      await handleExecutionFileSelected(file);
+      uploadInput.value = '';
+    });
+  }
+
+  const transformBtn = document.getElementById('execution-transform-btn');
+  if (transformBtn) {
+    transformBtn.addEventListener('click', handleTransformExecutionData);
+  }
+
+  const clearFiltersBtn = document.getElementById('dashboard-clear-filters');
+  if (clearFiltersBtn) {
+    clearFiltersBtn.addEventListener('click', () => {
+      store.patchUi({ dashboard: { filters: {} } });
     });
   }
 }
@@ -158,18 +340,58 @@ function bindWaterfallFilters() {
   });
 }
 
+function setPathValue(target, path, rawText) {
+  const keys = path.split('.');
+  if (keys.length === 1) {
+    const current = target[keys[0]];
+    target[keys[0]] = typeof current === 'number' ? Number(rawText || 0) : rawText;
+    return;
+  }
+  let cursor = target;
+  for (let i = 0; i < keys.length - 1; i += 1) {
+    const part = keys[i];
+    if (!cursor[part] || typeof cursor[part] !== 'object') cursor[part] = {};
+    cursor = cursor[part];
+  }
+  const leaf = keys[keys.length - 1];
+  const current = cursor[leaf];
+  cursor[leaf] = typeof current === 'number' ? Number(rawText || 0) : rawText;
+}
+
 function bindInlineEdits() {
   document.querySelectorAll('[data-edit-cell]').forEach((cell) => {
     cell.addEventListener('blur', () => {
       const dataset = cell.dataset.editCell;
       const row = Number(cell.dataset.row);
       const col = cell.dataset.col;
-      const clone = [...store.state[dataset]];
+      const clone = [...(store.state.workingInputs?.[dataset] || [])];
       if (!clone[row]) return;
-      clone[row] = { ...clone[row], [col]: cell.textContent.trim() };
-      store.set({ [dataset]: clone });
+      const rowClone = { ...clone[row] };
+      setPathValue(rowClone, col, cell.textContent.trim());
+      clone[row] = rowClone;
+      store.updateWorkingDataset(dataset, clone, true);
     });
   });
+}
+
+function bindPomInputsActions() {
+  const commitBtn = document.getElementById('commit-inputs-btn');
+  if (commitBtn) {
+    commitBtn.addEventListener('click', () => {
+      store.commitWorkingInputs();
+      setPomInputsNotice('success', 'Inputs and Planning Tables changes committed.');
+    });
+  }
+
+  const workbookInput = document.getElementById('workbook-upload-input');
+  if (workbookInput) {
+    workbookInput.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await applyWorkbookUpload(file);
+      workbookInput.value = '';
+    });
+  }
 }
 
 function bindAdminActions() {
@@ -185,50 +407,9 @@ function bindDatasetExports() {
   document.querySelectorAll('[data-export-dataset]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const key = btn.dataset.exportDataset;
-      triggerDownload(`${key}.csv`, toCSV(store.state[key] || []));
+      const rows = store.state.workingInputs?.[key] || [];
+      triggerDownload(`${key}.csv`, toCSV(rows));
     });
-  });
-}
-
-function bindShellActions() {
-  const filterKeyMap = {
-    'fy-filter': 'payoutFy',
-    'category-filter': 'category',
-    'oe-filter': 'oe',
-    'bonus-type-filter': 'bonusType',
-    'status-filter': 'status'
-  };
-
-  Object.entries(filterKeyMap).forEach(([id, key]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener('change', () => {
-      const value = el.value;
-      const globalFilters = { ...(store.state.ui.globalFilters || {}), [key]: value };
-      const dashboardFilters = { ...(store.state.ui.dashboard?.filters || {}), [key]: value ? [value] : [] };
-      const waterfallFilters = { ...(store.state.ui.waterfall?.filters || {}) };
-      if (['category', 'oe', 'payoutFy'].includes(key)) waterfallFilters[key] = value ? [value] : [];
-      store.patchUi({ globalFilters, dashboard: { filters: dashboardFilters }, waterfall: { filters: waterfallFilters } });
-    });
-  });
-
-  document.getElementById('rebuild-model-btn')?.addEventListener('click', () => {
-    store.set({});
-  });
-
-  document.getElementById('clear-state-btn')?.addEventListener('click', () => {
-    store.clearStorage();
-  });
-
-  document.getElementById('load-samples-btn')?.addEventListener('click', () => {
-    store.resetDemo();
-  });
-
-  document.getElementById('export-view-btn')?.addEventListener('click', () => {
-    const route = currentRoute();
-    const filename = `${route.toLowerCase().replace(/\s+/g, '-')}-view.csv`;
-    const rows = route === 'Execution Dashboard' ? store.state.transformed : route === 'Payout Waterfall' ? store.state.projectionPayoutSchedule : store.state.projections;
-    triggerDownload(filename, toCSV(rows));
   });
 }
 
@@ -243,16 +424,18 @@ function bindTableHandlers() {
 }
 
 function render() {
+  if (!app) return;
   const route = currentRoute();
   const fn = pageMap[route] || overviewPage;
-  app.innerHTML = renderLayout(route, fn(store.state), store.state);
+  app.innerHTML = renderLayout(route, fn(store.state));
   bindUploadHandlers();
+  bindExecutionDashboardActions();
   bindDashboardFilters();
   bindWaterfallFilters();
   bindInlineEdits();
+  bindPomInputsActions();
   bindAdminActions();
   bindDatasetExports();
-  bindShellActions();
   bindTableHandlers();
 }
 

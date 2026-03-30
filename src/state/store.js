@@ -7,6 +7,10 @@ import { calculateBudgetVariance } from '../core/reconciliation.js';
 const KEY = 'bonus-ecosystem-state-v2';
 const DATASET_KEYS = ['execution', 'bonusInfo', 'targetAverage', 'controls', 'aggregateTakers', 'crosswalk'];
 
+function ensureArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 const initialState = {
   bonusInfo: seedBonusInfo,
   targetAverage: seedTargetAverage,
@@ -47,12 +51,15 @@ function deepClone(value) {
 }
 
 function pickCommitted(state) {
-  return Object.fromEntries(DATASET_KEYS.map((key) => [key, state[key] || []]));
+  return Object.fromEntries(DATASET_KEYS.map((key) => [key, ensureArray(state[key])]));
 }
 
 function buildWorkingInputs(state, committed) {
   const existing = state.workingInputs || {};
-  return Object.fromEntries(DATASET_KEYS.map((key) => [key, existing[key] || deepClone(committed[key])]));
+  return Object.fromEntries(DATASET_KEYS.map((key) => [
+    key,
+    Array.isArray(existing[key]) ? existing[key] : deepClone(committed[key])
+  ]));
 }
 
 function computeDerived(state) {

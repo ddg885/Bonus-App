@@ -5,6 +5,11 @@ import { buildProjectionFiscalYears, twoPassDistribution } from '../core/project
 import { calculateBudgetVariance } from '../core/reconciliation.js';
 
 const KEY = 'bonus-ecosystem-state-v2';
+const DATASET_KEYS = ['execution', 'bonusInfo', 'targetAverage', 'controls', 'aggregateTakers', 'crosswalk'];
+
+function ensureArray(value) {
+  return Array.isArray(value) ? value : [];
+}
 
 const initialState = {
   bonusInfo: seedBonusInfo,
@@ -13,6 +18,14 @@ const initialState = {
   aggregateTakers: seedAggregateTakers,
   crosswalk: seedCrosswalk,
   execution: seedExecution,
+  workingInputs: {
+    bonusInfo: seedBonusInfo,
+    targetAverage: seedTargetAverage,
+    controls: seedControls,
+    aggregateTakers: seedAggregateTakers,
+    crosswalk: seedCrosswalk,
+    execution: seedExecution
+  },
   transformed: [],
   transformedIssues: [],
   projections: [],
@@ -21,7 +34,7 @@ const initialState = {
   variances: [],
   runMeta: { transformedAt: null, projectedAt: null },
   settings: { fyStartMonth: 10 },
-  ui: { tables: {}, dashboard: { filters: {} }, waterfall: { filters: {} } },
+  ui: { tables: {}, dashboard: { filters: {} }, waterfall: { filters: {} }, pomInputs: {} },
   inputStatus: {
     execution: true,
     bonusInfo: true,
@@ -32,18 +45,38 @@ const initialState = {
   }
 };
 
+function deepClone(value) {
+  if (typeof structuredClone === 'function') return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
+}
+
+function pickCommitted(state) {
+  return Object.fromEntries(DATASET_KEYS.map((key) => [key, ensureArray(state[key])]));
+}
+
+function buildWorkingInputs(state, committed) {
+  const existing = state.workingInputs || {};
+  return Object.fromEntries(DATASET_KEYS.map((key) => [
+    key,
+    Array.isArray(existing[key]) ? existing[key] : deepClone(committed[key])
+  ]));
+}
+
 function computeDerived(state) {
-  const mapped = applyCrosswalk(state.execution, state.crosswalk);
+  const committed = pickCommitted(state);
+  const mapped = applyCrosswalk(committed.execution, committed.crosswalk);
   const transformResult = transformExecutionToPayoutSchedule(mapped, state.settings?.fyStartMonth || 10);
   const projectionResult = twoPassDistribution({
-    aggregateRows: state.aggregateTakers,
-    bonusInfoRows: state.bonusInfo,
-    targetRows: state.targetAverage,
+    aggregateRows: committed.aggregateTakers,
+    bonusInfoRows: committed.bonusInfo,
+    targetRows: committed.targetAverage,
     fiscalYears: buildProjectionFiscalYears('FY2026', 'FY2032')
   });
-  const variances = calculateBudgetVariance(projectionResult.projections, state.controls);
+  const variances = calculateBudgetVariance(projectionResult.projections, committed.controls);
   return {
     ...state,
+    ...committed,
+    workingInputs: buildWorkingInputs(state, committed),
     transformed: transformResult.rows,
     transformedIssues: transformResult.issues,
     projections: projectionResult.projections,
@@ -79,6 +112,23 @@ export const store = {
   },
   patchUi(nextUi) {
     this.set({ ui: { ...this.state.ui, ...nextUi } });
+  },
+  updateWorkingDataset(datasetKey, rows, status = true) {
+    const nextWorking = { ...this.state.workingInputs, [datasetKey]: rows };
+    this.set({
+      workingInputs: nextWorking,
+      inputStatus: { ...this.state.inputStatus, [datasetKey]: status }
+    });
+  },
+  replaceWorkingInputs(nextWorkingInputs, statusMap = {}) {
+    this.set({
+      workingInputs: { ...this.state.workingInputs, ...nextWorkingInputs },
+      inputStatus: { ...this.state.inputStatus, ...statusMap }
+    });
+  },
+  commitWorkingInputs() {
+    const committed = Object.fromEntries(DATASET_KEYS.map((key) => [key, deepClone(this.state.workingInputs[key] || [])]));
+    this.set(committed);
   },
   resetDemo() {
     this.set(initialState);

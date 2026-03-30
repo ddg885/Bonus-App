@@ -18,12 +18,23 @@ const aliases = {
   dodid: 'dodid',
   typecode: 'typeCode',
   effectivedate: 'effectiveDate',
+  mbrreservebonussubmeffectivedate: 'effectiveDate',
+  reservbonussubmeffectivedate: 'effectiveDate',
+  mbrreservebonuseffectivedate: 'effectiveDate',
   installmentamount: 'installmentAmount',
+  mbrreservebonusamount: 'installmentAmount',
+  reservebonusamount: 'installmentAmount',
+  bonusauthorizedamount: 'installmentAmount',
+  amountauthorized: 'installmentAmount',
   installmenteffectivedate: 'installmentDate',
   installmentnumber: 'installmentNumber',
+  numberofinstallments: 'installments',
+  installmentcount: 'installments',
   paygrade: 'paygrade',
   uic: 'uic',
-  approvalflag: 'status'
+  approvalflag: 'status',
+  approvalstatus: 'status',
+  bonusapprovalflag: 'status'
 };
 
 export function normalizeHeader(input) {
