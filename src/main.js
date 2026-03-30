@@ -205,6 +205,32 @@ function bindExecutionDashboardActions() {
     });
   };
 
+  const normalizeExecutionUploadRows = (rows) => rows.map((row, idx) => {
+    const fallbackStatus = row.status || row.dutyStatus || row.payStatus || 'UNKNOWN';
+    const fallbackOe = row.oe || (row.memberOfficerDesignator ? 'OFFICER' : '');
+    return {
+      ...row,
+      status: fallbackStatus,
+      oe: fallbackOe || 'UNK',
+      effectiveDate: row.effectiveDate || row.installmentDate || '',
+      installmentAmount: row.installmentAmount || row.amount || 0,
+      sourceId: row.sourceId || row.trackNumber || `execution-${idx + 1}`
+    };
+  });
+
+  const validateExecutionColumns = (rows) => {
+    if (!rows.length) return { valid: false, errors: ['No rows found'] };
+    const headers = new Set(Object.keys(rows[0]));
+    const requiredHeaderGroups = [
+      { label: 'DODID', keys: ['dodid'] },
+      { label: 'Effective Date (or Install Effdt)', keys: ['effectiveDate', 'installmentDate'] },
+      { label: 'Install Amount', keys: ['installmentAmount', 'amount'] }
+    ];
+    const missing = requiredHeaderGroups
+      .filter((group) => !group.keys.some((key) => headers.has(key)))
+      .map((group) => group.label);
+    return { valid: missing.length === 0, errors: missing.map((label) => `Missing required field group: ${label}`) };
+  };
   const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
 
   const parseExecutionFile = async (file) => {
@@ -234,11 +260,14 @@ function bindExecutionDashboardActions() {
     }
     try {
       const rows = await parseExecutionFile(file);
+      const normalizedRows = normalizeExecutionUploadRows(rows);
+      const validation = validateExecutionColumns(normalizedRows);
       const validation = validateExecutionColumns(rows);
       if (!validation.valid) {
         setExecutionUploadError(dashboardState, `Validation failed: ${validation.errors.join('; ')}`, file.name);
         return;
       }
+      setRawExecutionRows(dashboardState, normalizedRows, file.name);
       setRawExecutionRows(dashboardState, rows, file.name);
     } catch (error) {
       setExecutionUploadError(dashboardState, error?.message || 'Unable to read or parse Bonus Execution file.', file.name);
