@@ -103,6 +103,7 @@ input[type='file'] {
 .page-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .page-header h2 { margin: 0 0 8px; }
 .page-header p, .muted, .subtle, .last-rebuild, .empty { color: var(--muted); }
+.danger { color: var(--negative); }
 
 .panel, .chart-panel, .hero-panel, .table-panel {
   background: var(--surface);

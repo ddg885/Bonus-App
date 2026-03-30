@@ -174,58 +174,97 @@ function bindUploadHandlers() {
 
 
 function bindExecutionDashboardActions() {
+  const setExecutionDashboardState = (next) => {
+    store.patchUi({
+      executionDashboard: next,
+      dashboard: { filters: {} }
+    });
+  };
+
+  const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
+
+  const handleExecutionFileUpload = async (file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setExecutionDashboardState({
+        fileName: file.name,
+        rawRows: [],
+        transformedRows: [],
+        issues: ['Invalid file type. Upload a Bonus Execution CSV file.'],
+        hasTransformed: false
+      });
+      return;
+    }
+    try {
+      const rows = parseCSV(await file.text()).map(normalizeRowHeaders);
+      const validation = validateExecutionColumns(rows);
+      if (!validation.valid) {
+        setExecutionDashboardState({
+          fileName: file.name,
+          rawRows: [],
+          transformedRows: [],
+          issues: [`Validation failed: ${validation.errors.join('; ')}`],
+          hasTransformed: false
+        });
+        return;
+      }
+      setExecutionDashboardState({
+        fileName: file.name,
+        rawRows: rows,
+        transformedRows: [],
+        issues: [],
+        hasTransformed: false
+      });
+    } catch (error) {
+      setExecutionDashboardState({
+        fileName: file.name,
+        rawRows: [],
+        transformedRows: [],
+        issues: [error?.message || 'Unable to read or parse Bonus Execution CSV file.'],
+        hasTransformed: false
+      });
+    }
+  };
+
+  const handleTransformExecutionData = () => {
+    const dashboardState = store.state.ui?.executionDashboard || {};
+    const rawRows = dashboardState.rawRows || [];
+    if (!rawRows.length) {
+      store.patchUi({
+        executionDashboard: {
+          ...dashboardState,
+          hasTransformed: false,
+          transformedRows: [],
+          issues: ['Upload Bonus Execution data before running transforms.']
+        }
+      });
+      return;
+    }
+    const mapped = applyCrosswalk(rawRows, store.state.crosswalk || []);
+    const result = transformExecutionToPayoutSchedule(mapped, store.state.settings?.fyStartMonth || 10);
+    store.patchUi({
+      executionDashboard: {
+        ...dashboardState,
+        transformedRows: result.rows,
+        issues: result.issues || [],
+        hasTransformed: true,
+        transformedAt: new Date().toISOString()
+      }
+    });
+  };
+
   const uploadInput = document.getElementById('execution-dashboard-upload');
   if (uploadInput) {
     uploadInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
-      if (!file) return;
-      const rows = parseCSV(await file.text()).map(normalizeRowHeaders);
-      const validation = validateRequiredColumns(rows, required.execution || []);
-      if (!validation.valid) {
-        store.patchUi({
-          executionDashboard: {
-            fileName: file.name,
-            rawRows: [],
-            transformedRows: [],
-            issues: validation.errors,
-            hasTransformed: false
-          },
-          dashboard: { filters: {} }
-        });
-        return;
-      }
-      store.patchUi({
-        executionDashboard: {
-          fileName: file.name,
-          rawRows: rows,
-          transformedRows: [],
-          issues: [],
-          hasTransformed: false
-        },
-        dashboard: { filters: {} }
-      });
+      await handleExecutionFileUpload(file);
       uploadInput.value = '';
     });
   }
 
   const transformBtn = document.getElementById('execution-transform-btn');
   if (transformBtn) {
-    transformBtn.addEventListener('click', () => {
-      const dashboardState = store.state.ui?.executionDashboard || {};
-      const rawRows = dashboardState.rawRows || [];
-      if (!rawRows.length) return;
-      const mapped = applyCrosswalk(rawRows, store.state.crosswalk || []);
-      const result = transformExecutionToPayoutSchedule(mapped, store.state.settings?.fyStartMonth || 10);
-      store.patchUi({
-        executionDashboard: {
-          ...dashboardState,
-          transformedRows: result.rows,
-          issues: result.issues || [],
-          hasTransformed: true,
-          transformedAt: new Date().toISOString()
-        }
-      });
-    });
+    transformBtn.addEventListener('click', handleTransformExecutionData);
   }
 
   const clearFiltersBtn = document.getElementById('dashboard-clear-filters');

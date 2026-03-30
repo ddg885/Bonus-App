@@ -96,7 +96,7 @@ export function renderLayout(active, content, state) {
     </aside>
     <main class="main-shell">
       ${topbar(state)}
-      ${intakeToolbar(state)}
+      ${active === 'Execution Dashboard' ? '' : intakeToolbar(state)}
       <section class="page-container">${content}</section>
     </main>
   </div>`;
