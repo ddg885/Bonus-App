@@ -181,48 +181,67 @@ function bindExecutionDashboardActions() {
     });
   };
 
+  const setRawExecutionRows = (dashboardState, rows, fileName) => {
+    setExecutionDashboardState({
+      ...dashboardState,
+      fileName,
+      rawRows: rows,
+      transformedRows: [],
+      hasTransformed: false,
+      transformedAt: null,
+      issues: []
+    });
+  };
+
+  const setExecutionUploadError = (dashboardState, error, fileName = '') => {
+    setExecutionDashboardState({
+      ...dashboardState,
+      fileName,
+      rawRows: [],
+      transformedRows: [],
+      hasTransformed: false,
+      transformedAt: null,
+      issues: [error]
+    });
+  };
+
   const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
 
-  const handleExecutionFileUpload = async (file) => {
-    if (!file) return;
-    if (!file.name.toLowerCase().endsWith('.csv')) {
-      setExecutionDashboardState({
-        fileName: file.name,
-        rawRows: [],
-        transformedRows: [],
-        issues: ['Invalid file type. Upload a Bonus Execution CSV file.'],
-        hasTransformed: false
-      });
+  const parseExecutionFile = async (file) => {
+    const lowerName = file.name.toLowerCase();
+    if (lowerName.endsWith('.csv')) {
+      return parseCSV(await file.text()).map(normalizeRowHeaders);
+    }
+    if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+      const XLSX = window.XLSX;
+      if (!XLSX) throw new Error('Excel parser is unavailable. Refresh the page and try again.');
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: false });
+      const executionSheet = workbook.SheetNames.find((sheetName) => {
+        const normalized = String(sheetName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return ['execution', 'executionapprovaldata', 'executiondata', 'approvaldata'].includes(normalized);
+      }) || workbook.SheetNames[0];
+      const sheet = workbook.Sheets[executionSheet];
+      return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false }).map(normalizeRowHeaders);
+    }
+    throw new Error('Invalid file type. Upload a Bonus Execution CSV or Excel file.');
+  };
+
+  const handleExecutionFileSelected = async (file) => {
+    const dashboardState = store.state.ui?.executionDashboard || {};
+    if (!file) {
+      setExecutionUploadError(dashboardState, 'No file selected. Choose a Bonus Execution file to continue.');
       return;
     }
     try {
-      const rows = parseCSV(await file.text()).map(normalizeRowHeaders);
+      const rows = await parseExecutionFile(file);
       const validation = validateExecutionColumns(rows);
       if (!validation.valid) {
-        setExecutionDashboardState({
-          fileName: file.name,
-          rawRows: [],
-          transformedRows: [],
-          issues: [`Validation failed: ${validation.errors.join('; ')}`],
-          hasTransformed: false
-        });
+        setExecutionUploadError(dashboardState, `Validation failed: ${validation.errors.join('; ')}`, file.name);
         return;
       }
-      setExecutionDashboardState({
-        fileName: file.name,
-        rawRows: rows,
-        transformedRows: [],
-        issues: [],
-        hasTransformed: false
-      });
+      setRawExecutionRows(dashboardState, rows, file.name);
     } catch (error) {
-      setExecutionDashboardState({
-        fileName: file.name,
-        rawRows: [],
-        transformedRows: [],
-        issues: [error?.message || 'Unable to read or parse Bonus Execution CSV file.'],
-        hasTransformed: false
-      });
+      setExecutionUploadError(dashboardState, error?.message || 'Unable to read or parse Bonus Execution file.', file.name);
     }
   };
 
@@ -257,7 +276,7 @@ function bindExecutionDashboardActions() {
   if (uploadInput) {
     uploadInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
-      await handleExecutionFileUpload(file);
+      await handleExecutionFileSelected(file);
       uploadInput.value = '';
     });
   }
