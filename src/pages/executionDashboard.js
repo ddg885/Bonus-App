@@ -48,7 +48,7 @@ function renderFilter(label, key, allRows, filters) {
 function emptyState(rawCount) {
   const guidance = rawCount
     ? 'Raw rows are loaded. Click Transform Data to run the execution pipeline and populate dashboard results.'
-    : 'Upload execution data, then click Transform Data to populate this dashboard.';
+    : 'Upload Bonus Execution data, then click Transform Data to populate this dashboard.';
   return `<section class="panel"><h3>Execution Summary</h3><p class="empty">${guidance}</p></section>`;
 }
 
@@ -57,6 +57,7 @@ export function executionDashboardPage(state) {
   const rawRows = dashboardState.rawRows || [];
   const transformedRows = dashboardState.transformedRows || [];
   const hasTransformed = Boolean(dashboardState.hasTransformed);
+  const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
   const topBli = groupedAmount(filtered, 'budgetLineItem').sort((a, b) => b.value - a.value).slice(0, 10);
@@ -66,7 +67,7 @@ export function executionDashboardPage(state) {
     <section class="panel">
       <h3>Bonus Execution Data</h3>
       <div class="intake-toolbar-left">
-        <label>Upload Execution CSV
+        <label>Upload Bonus Execution CSV
           <input id="execution-dashboard-upload" type="file" accept=".csv,text/csv" />
         </label>
         <button id="execution-transform-btn" class="primary-btn" ${rawRows.length ? '' : 'disabled'}>Transform Data</button>
@@ -76,7 +77,8 @@ export function executionDashboardPage(state) {
         <div><strong>Raw Rows Loaded</strong> <span>${rawRows.length}</span></div>
         <div><strong>Transformed Rows</strong> <span>${hasTransformed ? transformedRows.length : 0}</span></div>
       </div>
-      <p class="muted">Upload only stores raw rows. Dashboard metrics/charts render after you click Transform Data.</p>
+      ${issues.length ? `<p class="danger">${issues.join(' | ')}</p>` : ''}
+      <p class="muted">This page only supports Bonus Execution data. Upload only stores raw rows; dashboard metrics/charts render after you click Transform Data.</p>
     </section>
     <section class="panel">
       <h3>Filters</h3>
