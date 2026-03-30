@@ -23,27 +23,7 @@ const aliases = {
   installmentnumber: 'installmentNumber',
   paygrade: 'paygrade',
   uic: 'uic',
-  approvalflag: 'status',
-  mbrreservebonussubmcategory: 'category',
-  mbrreservebonussubmcategorycode: 'categoryCode',
-  mbrreservebonussubmtype: 'bonusType',
-  mbrreservebonussubmtypecode: 'typeCode',
-  mbrreservebonussubmeffectivedate: 'effectiveDate',
-  mbrreservebonussubminstallamount: 'installmentAmount',
-  mbrreservebonussubminstalleffdt: 'installmentDate',
-  mbrreservebonussubminstallnum: 'installmentNumber',
-  mbrreservebonussubmtracknumactual: 'trackNumber',
-  mbrreservebonussubmbonustermmonths: 'bonusTermMonths',
-  mbrreservebonussubmratrank: 'rateRank',
-  mbrreservebonussubmnec: 'nec',
-  mbrreservebonussubmdesigcd: 'memberOfficerDesignator',
-  memberofficerdesignator: 'memberOfficerDesignator',
-  memberpaygrade: 'paygrade',
-  membernavycomponent: 'memberNavyComponent',
-  reserveuicindicator: 'reserveUicIndicator',
-  dutystatus: 'dutyStatus',
-  paystatus: 'payStatus',
-  mbrreservebonussubminstallstatind: 'status'
+  approvalflag: 'status'
 };
 
 export function normalizeHeader(input) {
