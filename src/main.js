@@ -231,6 +231,7 @@ function bindExecutionDashboardActions() {
       .map((group) => group.label);
     return { valid: missing.length === 0, errors: missing.map((label) => `Missing required field group: ${label}`) };
   };
+  const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
 
   const parseExecutionFile = async (file) => {
     const lowerName = file.name.toLowerCase();
@@ -261,11 +262,13 @@ function bindExecutionDashboardActions() {
       const rows = await parseExecutionFile(file);
       const normalizedRows = normalizeExecutionUploadRows(rows);
       const validation = validateExecutionColumns(normalizedRows);
+      const validation = validateExecutionColumns(rows);
       if (!validation.valid) {
         setExecutionUploadError(dashboardState, `Validation failed: ${validation.errors.join('; ')}`, file.name);
         return;
       }
       setRawExecutionRows(dashboardState, normalizedRows, file.name);
+      setRawExecutionRows(dashboardState, rows, file.name);
     } catch (error) {
       setExecutionUploadError(dashboardState, error?.message || 'Unable to read or parse Bonus Execution file.', file.name);
     }
