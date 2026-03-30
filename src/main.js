@@ -205,12 +205,31 @@ function bindExecutionDashboardActions() {
     });
   };
 
+  const normalizeExecutionRow = (row, idx) => {
+    const normalized = normalizeRowHeaders(row);
+    const effectiveDate = normalized.effectiveDate
+      || normalized.installmentDate
+      || normalized.submissionEffectiveDate
+      || '';
+    const installmentAmount = normalized.installmentAmount
+      || normalized.amount
+      || normalized.baseAmount
+      || 0;
+    return {
+      ...normalized,
+      effectiveDate,
+      installmentAmount: Number(installmentAmount || 0),
+      installments: Number(normalized.installments || normalized.installmentNumber || 1) || 1,
+      sourceId: normalized.sourceId || `execution-upload-${idx + 1}`
+    };
+  };
+
   const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
 
   const parseExecutionFile = async (file) => {
     const lowerName = file.name.toLowerCase();
     if (lowerName.endsWith('.csv')) {
-      return parseCSV(await file.text()).map(normalizeRowHeaders);
+      return parseCSV(await file.text()).map(normalizeExecutionRow);
     }
     if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
       const XLSX = window.XLSX;
@@ -221,7 +240,7 @@ function bindExecutionDashboardActions() {
         return ['execution', 'executionapprovaldata', 'executiondata', 'approvaldata'].includes(normalized);
       }) || workbook.SheetNames[0];
       const sheet = workbook.Sheets[executionSheet];
-      return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false }).map(normalizeRowHeaders);
+      return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false }).map(normalizeExecutionRow);
     }
     throw new Error('Invalid file type. Upload a Bonus Execution CSV or Excel file.');
   };
@@ -405,6 +424,7 @@ function bindTableHandlers() {
 }
 
 function render() {
+  if (!app) return;
   const route = currentRoute();
   const fn = pageMap[route] || overviewPage;
   app.innerHTML = renderLayout(route, fn(store.state));
