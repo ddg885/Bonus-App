@@ -90,10 +90,45 @@ function computeDerived(state) {
   };
 }
 
+function pickPersistedUi(ui = {}) {
+  const executionDashboard = ui.executionDashboard || {};
+  return {
+    tables: ui.tables || {},
+    dashboard: { filters: ui.dashboard?.filters || {} },
+    waterfall: { filters: ui.waterfall?.filters || {} },
+    pomInputs: ui.pomInputs || {},
+    intakeSource: ui.intakeSource || '',
+    executionDashboard: {
+      fileName: executionDashboard.fileName || '',
+      rawRowCount: Number(executionDashboard.rawRowCount || 0),
+      transformedRowCount: Number(executionDashboard.transformedRowCount || 0),
+      hasTransformed: Boolean(executionDashboard.hasTransformed),
+      transformedAt: executionDashboard.transformedAt || null,
+      issues: Array.isArray(executionDashboard.issues) ? executionDashboard.issues : []
+    }
+  };
+}
+
+function serializeForStorage(state) {
+  return {
+    settings: state.settings || initialState.settings,
+    ui: pickPersistedUi(state.ui),
+    inputStatus: state.inputStatus || initialState.inputStatus
+  };
+}
+
+function persistState(state) {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(serializeForStorage(state)));
+  } catch (error) {
+    console.warn('Unable to persist app state; continuing with in-memory state only.', error);
+  }
+}
+
 function load() {
   try {
     const parsed = JSON.parse(localStorage.getItem(KEY) || 'null');
-    return parsed ? computeDerived(parsed) : computeDerived(initialState);
+    return parsed ? computeDerived({ ...initialState, ...parsed }) : computeDerived(initialState);
   } catch {
     return computeDerived(initialState);
   }
@@ -107,7 +142,7 @@ export const store = {
   },
   set(partial) {
     this.state = computeDerived({ ...this.state, ...partial });
-    localStorage.setItem(KEY, JSON.stringify(this.state));
+    persistState(this.state);
     this.listeners.forEach((fn) => fn(this.state));
   },
   patchUi(nextUi) {

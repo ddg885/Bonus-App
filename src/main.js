@@ -174,6 +174,11 @@ function bindUploadHandlers() {
 
 
 function bindExecutionDashboardActions() {
+  const getRuntimeDashboardState = () => store.state.executionDashboardRuntime || { rawRows: [], transformedRows: [] };
+  const patchRuntimeDashboardState = (next) => {
+    store.set({ executionDashboardRuntime: next });
+  };
+
   const setExecutionDashboardState = (next) => {
     store.patchUi({
       executionDashboard: next,
@@ -182,11 +187,16 @@ function bindExecutionDashboardActions() {
   };
 
   const setRawExecutionRows = (dashboardState, rows, fileName) => {
+    patchRuntimeDashboardState({
+      ...getRuntimeDashboardState(),
+      rawRows: rows,
+      transformedRows: []
+    });
     setExecutionDashboardState({
       ...dashboardState,
       fileName,
-      rawRows: rows,
-      transformedRows: [],
+      rawRowCount: rows.length,
+      transformedRowCount: 0,
       hasTransformed: false,
       transformedAt: null,
       issues: []
@@ -194,11 +204,16 @@ function bindExecutionDashboardActions() {
   };
 
   const setExecutionUploadError = (dashboardState, error, fileName = '') => {
+    patchRuntimeDashboardState({
+      ...getRuntimeDashboardState(),
+      rawRows: [],
+      transformedRows: []
+    });
     setExecutionDashboardState({
       ...dashboardState,
       fileName,
-      rawRows: [],
-      transformedRows: [],
+      rawRowCount: 0,
+      transformedRowCount: 0,
       hasTransformed: false,
       transformedAt: null,
       issues: [error]
@@ -266,13 +281,13 @@ function bindExecutionDashboardActions() {
 
   const handleTransformExecutionData = () => {
     const dashboardState = store.state.ui?.executionDashboard || {};
-    const rawRows = dashboardState.rawRows || [];
+    const rawRows = getRuntimeDashboardState().rawRows || [];
     if (!rawRows.length) {
       store.patchUi({
         executionDashboard: {
           ...dashboardState,
           hasTransformed: false,
-          transformedRows: [],
+          transformedRowCount: 0,
           issues: ['Upload Bonus Execution data before running transforms.']
         }
       });
@@ -280,10 +295,14 @@ function bindExecutionDashboardActions() {
     }
     const mapped = applyCrosswalk(rawRows, store.state.crosswalk || []);
     const result = transformExecutionToPayoutSchedule(mapped, store.state.settings?.fyStartMonth || 10);
+    patchRuntimeDashboardState({
+      ...getRuntimeDashboardState(),
+      transformedRows: result.rows
+    });
     store.patchUi({
       executionDashboard: {
         ...dashboardState,
-        transformedRows: result.rows,
+        transformedRowCount: result.rows.length,
         issues: result.issues || [],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
