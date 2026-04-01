@@ -32,7 +32,7 @@ const pageMap = {
 };
 
 const required = {
-  execution: ['dodid', 'effectiveDate'],
+  execution: ['dodid'],
   bonusInfo: ['budgetLineItem', 'category', 'oe', 'bonusType', 'amount'],
   targetAverage: ['category'],
   controls: ['budgetLineItem', 'category', 'oe', 'bonusType'],
@@ -239,7 +239,15 @@ function bindExecutionDashboardActions() {
     };
   };
 
-  const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
+  const validateExecutionColumns = (rows) => {
+    const requiredColumns = validateRequiredColumns(rows, required.execution || []);
+    if (!requiredColumns.valid) return requiredColumns;
+    const keys = Object.keys(rows[0] || {});
+    if (!keys.includes('effectiveDate')) {
+      return { valid: false, errors: ['Missing required date column. Expected Effective Date or Install Effdt field.'] };
+    }
+    return { valid: true, errors: [] };
+  };
 
   const parseExecutionFile = async (file) => {
     const lowerName = file.name.toLowerCase();
@@ -271,11 +279,13 @@ function bindExecutionDashboardActions() {
       const validation = validateExecutionColumns(rows);
       if (!validation.valid) {
         setExecutionUploadError(dashboardState, `Validation failed: ${validation.errors.join('; ')}`, file.name);
-        return;
+        return false;
       }
       setRawExecutionRows(dashboardState, rows, file.name);
+      return true;
     } catch (error) {
       setExecutionUploadError(dashboardState, error?.message || 'Unable to read or parse Bonus Execution file.', file.name);
+      return false;
     }
   };
 
@@ -314,8 +324,8 @@ function bindExecutionDashboardActions() {
   if (uploadInput) {
     uploadInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
-      await handleExecutionFileSelected(file);
-      uploadInput.value = '';
+      const loaded = await handleExecutionFileSelected(file);
+      if (loaded) uploadInput.value = '';
     });
   }
 
