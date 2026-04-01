@@ -10,15 +10,24 @@ export const transformationAssumptions = [
 export function transformExecutionToPayoutSchedule(mappedRows, fyStartMonth = 10) {
   const output = [];
   const issues = [];
+  const stats = {
+    sourceRows: mappedRows.length,
+    transformedRows: 0,
+    skippedInvalidAmount: 0,
+    skippedInvalidDate: 0
+  };
 
   mappedRows.forEach((row) => {
     const count = Math.max(1, Number(row.installments || 1));
     const total = Number(row.installmentAmount || row.baseAmount || 0);
     if (!row.effectiveDate || Number.isNaN(new Date(row.effectiveDate).getTime())) {
-      issues.push({ sourceId: row.sourceId, severity: 'ERROR', message: 'Invalid effective date' });
+      stats.skippedInvalidDate += 1;
       return;
     }
-    if (total <= 0) issues.push({ sourceId: row.sourceId, severity: 'WARN', message: 'Non-positive amount' });
+    if (!Number.isFinite(total) || total <= 0) {
+      stats.skippedInvalidAmount += 1;
+      return;
+    }
 
     const perInstallment = count ? total / count : total;
     for (let i = 0; i < count; i += 1) {
@@ -44,8 +53,13 @@ export function transformExecutionToPayoutSchedule(mappedRows, fyStartMonth = 10
         traceSourceRow: row._row || null,
         trace: { sourceRowId: row.sourceId, ruleId: row.mappingRuleId || undefined }
       });
+      stats.transformedRows += 1;
     }
   });
 
-  return { rows: output, issues };
+  issues.push(`Rows transformed successfully: ${stats.transformedRows}`);
+  if (stats.skippedInvalidAmount) issues.push(`Rows skipped (missing/invalid/non-positive amount): ${stats.skippedInvalidAmount}`);
+  if (stats.skippedInvalidDate) issues.push(`Rows skipped (missing/invalid payout date): ${stats.skippedInvalidDate}`);
+
+  return { rows: output, issues, stats };
 }
