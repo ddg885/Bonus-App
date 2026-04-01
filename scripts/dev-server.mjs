@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 
 const port = 4173;
+const basePath = '/Bonus-App';
 const mime = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -13,8 +14,12 @@ const mime = {
 
 createServer(async (req, res) => {
   try {
-    const rawPath = req.url === '/' ? '/index.html' : req.url;
-    const filePath = join(process.cwd(), rawPath.split('?')[0]);
+    const incomingPath = req.url?.split('?')[0] || '/';
+    const trimmedPath = incomingPath.startsWith(basePath)
+      ? incomingPath.slice(basePath.length) || '/'
+      : incomingPath;
+    const rawPath = trimmedPath === '/' ? '/index.html' : trimmedPath;
+    const filePath = join(process.cwd(), rawPath);
     const data = await readFile(filePath);
     res.setHeader('Content-Type', mime[extname(filePath)] || 'text/plain');
     res.end(data);
@@ -23,5 +28,5 @@ createServer(async (req, res) => {
     res.end('Not found');
   }
 }).listen(port, () => {
-  console.log(`Dev server: http://localhost:${port}`);
+  console.log(`Dev server: http://localhost:${port}${basePath}/`);
 });
