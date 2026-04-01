@@ -59,6 +59,7 @@ export function executionDashboardPage(state) {
   const transformedRows = runtimeState.transformedRows || [];
   const rawRowCount = Number(dashboardState.rawRowCount || rawRows.length || 0);
   const transformedRowCount = Number(dashboardState.transformedRowCount || transformedRows.length || 0);
+  const fileName = dashboardState.fileName || '';
   const hasTransformed = Boolean(dashboardState.hasTransformed && transformedRows.length);
   const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
@@ -77,6 +78,7 @@ export function executionDashboardPage(state) {
         <button id="dashboard-clear-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear Filters</button>
       </div>
       <div class="dataset-status">
+        <div><strong>Selected File</strong> <span>${fileName || 'None selected'}</span></div>
         <div><strong>Raw Rows Loaded</strong> <span>${rawRowCount}</span></div>
         <div><strong>Transformed Rows</strong> <span>${hasTransformed ? transformedRowCount : 0}</span></div>
       </div>

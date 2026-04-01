@@ -6,6 +6,7 @@ import { calculateBudgetVariance } from '../core/reconciliation.js';
 
 const KEY = 'bonus-ecosystem-state-v2';
 const DATASET_KEYS = ['execution', 'bonusInfo', 'targetAverage', 'controls', 'aggregateTakers', 'crosswalk'];
+let persistenceDisabled = false;
 
 function ensureArray(value) {
   return Array.isArray(value) ? value : [];
@@ -92,8 +93,15 @@ function computeDerived(state) {
 
 function pickPersistedUi(ui = {}) {
   const executionDashboard = ui.executionDashboard || {};
+  const tables = Object.fromEntries(Object.entries(ui.tables || {}).map(([tableId, tableUi]) => [tableId, {
+    sortKey: tableUi?.sortKey || '',
+    sortDir: tableUi?.sortDir || 'asc',
+    pageSize: Number(tableUi?.pageSize || 25),
+    page: Number(tableUi?.page || 1),
+    visibleColumns: Array.isArray(tableUi?.visibleColumns) ? tableUi.visibleColumns : []
+  }]));
   return {
-    tables: ui.tables || {},
+    tables,
     dashboard: { filters: ui.dashboard?.filters || {} },
     waterfall: { filters: ui.waterfall?.filters || {} },
     pomInputs: ui.pomInputs || {},
@@ -118,9 +126,11 @@ function serializeForStorage(state) {
 }
 
 function persistState(state) {
+  if (persistenceDisabled) return;
   try {
     localStorage.setItem(KEY, JSON.stringify(serializeForStorage(state)));
   } catch (error) {
+    if (error?.name === 'QuotaExceededError') persistenceDisabled = true;
     console.warn('Unable to persist app state; continuing with in-memory state only.', error);
   }
 }
