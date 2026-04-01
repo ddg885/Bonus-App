@@ -4,9 +4,7 @@ import { transformExecutionToPayoutSchedule } from '../core/transformation.js';
 import { buildProjectionFiscalYears, twoPassDistribution } from '../core/projection.js';
 import { calculateBudgetVariance } from '../core/reconciliation.js';
 
-const KEY = 'bonus-ecosystem-state-v2';
 const DATASET_KEYS = ['execution', 'bonusInfo', 'targetAverage', 'controls', 'aggregateTakers', 'crosswalk'];
-let persistenceDisabled = false;
 
 function ensureArray(value) {
   return Array.isArray(value) ? value : [];
@@ -117,32 +115,10 @@ function pickPersistedUi(ui = {}) {
   };
 }
 
-function serializeForStorage(state) {
-  return {
-    settings: state.settings || initialState.settings,
-    ui: pickPersistedUi(state.ui),
-    inputStatus: state.inputStatus || initialState.inputStatus
-  };
-}
-
-function persistState(state) {
-  if (persistenceDisabled) return;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(serializeForStorage(state)));
-  } catch (error) {
-    if (error?.name === 'QuotaExceededError') persistenceDisabled = true;
-    console.warn('Unable to persist app state; continuing with in-memory state only.', error);
-  }
-}
-
 function load() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(KEY) || 'null');
-    return parsed ? computeDerived({ ...initialState, ...parsed }) : computeDerived(initialState);
-  } catch {
-    return computeDerived(initialState);
-  }
+  return computeDerived(initialState);
 }
+
 
 export const store = {
   state: load(),
@@ -152,7 +128,6 @@ export const store = {
   },
   set(partial) {
     this.state = computeDerived({ ...this.state, ...partial });
-    persistState(this.state);
     this.listeners.forEach((fn) => fn(this.state));
   },
   patchUi(nextUi) {
@@ -179,7 +154,6 @@ export const store = {
     this.set(initialState);
   },
   clearStorage() {
-    localStorage.removeItem(KEY);
     this.state = computeDerived(initialState);
     this.listeners.forEach((fn) => fn(this.state));
   }
