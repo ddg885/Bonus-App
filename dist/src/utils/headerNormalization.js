@@ -16,7 +16,6 @@ const aliases = {
   anniversarypayment: 'anniversaryPaymentPct',
   anniversarypaymentpct: 'anniversaryPaymentPct',
   dodid: 'dodid',
-  typecode: 'typeCode',
   effectivedate: 'effectiveDate',
   mbrreservebonussubmeffectivedate: 'effectiveDate',
   mbrreservebonussubminstalleffdt: 'effectiveDate',

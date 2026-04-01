@@ -220,20 +220,30 @@ function bindExecutionDashboardActions() {
     });
   };
 
+  const parseExecutionAmount = (value) => {
+    if (value == null) return null;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    const cleaned = String(value).trim().replace(/[$,]/g, '');
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const normalizeExecutionRow = (row, idx) => {
     const normalized = normalizeRowHeaders(row);
     const effectiveDate = normalized.effectiveDate
       || normalized.installmentDate
       || normalized.submissionEffectiveDate
       || '';
-    const installmentAmount = normalized.installmentAmount
-      || normalized.amount
-      || normalized.baseAmount
-      || 0;
+    const installmentAmount = parseExecutionAmount(
+      normalized.installmentAmount
+      ?? normalized.amount
+      ?? normalized.baseAmount
+    );
     return {
       ...normalized,
       effectiveDate,
-      installmentAmount: Number(installmentAmount || 0),
+      installmentAmount,
       installments: Number(normalized.installments || normalized.installmentNumber || 1) || 1,
       sourceId: normalized.sourceId || `execution-upload-${idx + 1}`
     };
@@ -313,7 +323,7 @@ function bindExecutionDashboardActions() {
       executionDashboard: {
         ...dashboardState,
         transformedRowCount: result.rows.length,
-        issues: result.issues || [],
+        issues: result.issues || [`Rows transformed successfully: ${result.rows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
       }
