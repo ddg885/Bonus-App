@@ -4,11 +4,8 @@ import { transformExecutionToPayoutSchedule } from '../core/transformation.js';
 import { buildProjectionFiscalYears, twoPassDistribution } from '../core/projection.js';
 import { calculateBudgetVariance } from '../core/reconciliation.js';
 
+const KEY = 'bonus-ecosystem-state-v2';
 const DATASET_KEYS = ['execution', 'bonusInfo', 'targetAverage', 'controls', 'aggregateTakers', 'crosswalk'];
-
-function ensureArray(value) {
-  return Array.isArray(value) ? value : [];
-}
 
 const initialState = {
   bonusInfo: seedBonusInfo,
@@ -50,15 +47,12 @@ function deepClone(value) {
 }
 
 function pickCommitted(state) {
-  return Object.fromEntries(DATASET_KEYS.map((key) => [key, ensureArray(state[key])]));
+  return Object.fromEntries(DATASET_KEYS.map((key) => [key, state[key] || []]));
 }
 
 function buildWorkingInputs(state, committed) {
   const existing = state.workingInputs || {};
-  return Object.fromEntries(DATASET_KEYS.map((key) => [
-    key,
-    Array.isArray(existing[key]) ? existing[key] : deepClone(committed[key])
-  ]));
+  return Object.fromEntries(DATASET_KEYS.map((key) => [key, existing[key] || deepClone(committed[key])]));
 }
 
 function computeDerived(state) {
@@ -89,36 +83,14 @@ function computeDerived(state) {
   };
 }
 
-function pickPersistedUi(ui = {}) {
-  const executionDashboard = ui.executionDashboard || {};
-  const tables = Object.fromEntries(Object.entries(ui.tables || {}).map(([tableId, tableUi]) => [tableId, {
-    sortKey: tableUi?.sortKey || '',
-    sortDir: tableUi?.sortDir || 'asc',
-    pageSize: Number(tableUi?.pageSize || 25),
-    page: Number(tableUi?.page || 1),
-    visibleColumns: Array.isArray(tableUi?.visibleColumns) ? tableUi.visibleColumns : []
-  }]));
-  return {
-    tables,
-    dashboard: { filters: ui.dashboard?.filters || {} },
-    waterfall: { filters: ui.waterfall?.filters || {} },
-    pomInputs: ui.pomInputs || {},
-    intakeSource: ui.intakeSource || '',
-    executionDashboard: {
-      fileName: executionDashboard.fileName || '',
-      rawRowCount: Number(executionDashboard.rawRowCount || 0),
-      transformedRowCount: Number(executionDashboard.transformedRowCount || 0),
-      hasTransformed: Boolean(executionDashboard.hasTransformed),
-      transformedAt: executionDashboard.transformedAt || null,
-      issues: Array.isArray(executionDashboard.issues) ? executionDashboard.issues : []
-    }
-  };
-}
-
 function load() {
-  return computeDerived(initialState);
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KEY) || 'null');
+    return parsed ? computeDerived(parsed) : computeDerived(initialState);
+  } catch {
+    return computeDerived(initialState);
+  }
 }
-
 
 export const store = {
   state: load(),
@@ -128,6 +100,7 @@ export const store = {
   },
   set(partial) {
     this.state = computeDerived({ ...this.state, ...partial });
+    localStorage.setItem(KEY, JSON.stringify(this.state));
     this.listeners.forEach((fn) => fn(this.state));
   },
   patchUi(nextUi) {
@@ -154,6 +127,7 @@ export const store = {
     this.set(initialState);
   },
   clearStorage() {
+    localStorage.removeItem(KEY);
     this.state = computeDerived(initialState);
     this.listeners.forEach((fn) => fn(this.state));
   }
