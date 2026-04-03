@@ -54,9 +54,13 @@ function emptyState(rawCount) {
 
 export function executionDashboardPage(state) {
   const dashboardState = state.ui?.executionDashboard || {};
-  const rawRows = dashboardState.rawRows || [];
-  const transformedRows = dashboardState.transformedRows || [];
-  const hasTransformed = Boolean(dashboardState.hasTransformed);
+  const runtimeState = state.executionDashboardRuntime || {};
+  const rawRows = runtimeState.rawRows || [];
+  const transformedRows = runtimeState.transformedRows || [];
+  const rawRowCount = Number(dashboardState.rawRowCount || rawRows.length || 0);
+  const transformedRowCount = Number(dashboardState.transformedRowCount || transformedRows.length || 0);
+  const fileName = dashboardState.fileName || '';
+  const hasTransformed = Boolean(dashboardState.hasTransformed && transformedRows.length);
   const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
@@ -74,8 +78,9 @@ export function executionDashboardPage(state) {
         <button id="dashboard-clear-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear Filters</button>
       </div>
       <div class="dataset-status">
-        <div><strong>Raw Rows Loaded</strong> <span>${rawRows.length}</span></div>
-        <div><strong>Transformed Rows</strong> <span>${hasTransformed ? transformedRows.length : 0}</span></div>
+        <div><strong>Selected File</strong> <span>${fileName || 'None selected'}</span></div>
+        <div><strong>Raw Rows Loaded</strong> <span>${rawRowCount}</span></div>
+        <div><strong>Transformed Rows</strong> <span>${hasTransformed ? transformedRowCount : 0}</span></div>
       </div>
       ${issues.length ? `<p class="danger">${issues.map((issue) => (typeof issue === 'string' ? issue : issue?.message || JSON.stringify(issue))).join(' | ')}</p>` : ''}
       <p class="muted">This page only supports Bonus Execution data. Upload only stores raw rows; dashboard metrics/charts render after you click Transform Data.</p>
@@ -112,6 +117,6 @@ export function executionDashboardPage(state) {
           { key: 'value', label: 'Amount' }
         ]
       })}
-    ` : emptyState(rawRows.length)}
+    ` : emptyState(rawRowCount)}
   `;
 }

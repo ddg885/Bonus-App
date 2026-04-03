@@ -32,7 +32,7 @@ const pageMap = {
 };
 
 const required = {
-  execution: ['dodid', 'effectiveDate'],
+  execution: ['dodid'],
   bonusInfo: ['budgetLineItem', 'category', 'oe', 'bonusType', 'amount'],
   targetAverage: ['category'],
   controls: ['budgetLineItem', 'category', 'oe', 'bonusType'],
@@ -174,6 +174,11 @@ function bindUploadHandlers() {
 
 
 function bindExecutionDashboardActions() {
+  const getRuntimeDashboardState = () => store.state.executionDashboardRuntime || { rawRows: [], transformedRows: [] };
+  const patchRuntimeDashboardState = (next) => {
+    store.set({ executionDashboardRuntime: next });
+  };
+
   const setExecutionDashboardState = (next) => {
     store.patchUi({
       executionDashboard: next,
@@ -182,11 +187,16 @@ function bindExecutionDashboardActions() {
   };
 
   const setRawExecutionRows = (dashboardState, rows, fileName) => {
+    patchRuntimeDashboardState({
+      ...getRuntimeDashboardState(),
+      rawRows: rows,
+      transformedRows: []
+    });
     setExecutionDashboardState({
       ...dashboardState,
       fileName,
-      rawRows: rows,
-      transformedRows: [],
+      rawRowCount: rows.length,
+      transformedRowCount: 0,
       hasTransformed: false,
       transformedAt: null,
       issues: []
@@ -194,23 +204,65 @@ function bindExecutionDashboardActions() {
   };
 
   const setExecutionUploadError = (dashboardState, error, fileName = '') => {
+    patchRuntimeDashboardState({
+      ...getRuntimeDashboardState(),
+      rawRows: [],
+      transformedRows: []
+    });
     setExecutionDashboardState({
       ...dashboardState,
       fileName,
-      rawRows: [],
-      transformedRows: [],
+      rawRowCount: 0,
+      transformedRowCount: 0,
       hasTransformed: false,
       transformedAt: null,
       issues: [error]
     });
   };
 
-  const validateExecutionColumns = (rows) => validateRequiredColumns(rows, required.execution || []);
+  const parseExecutionAmount = (value) => {
+    if (value == null) return null;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    const cleaned = String(value).trim().replace(/[$,]/g, '');
+    if (!cleaned) return null;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const normalizeExecutionRow = (row, idx) => {
+    const normalized = normalizeRowHeaders(row);
+    const effectiveDate = normalized.effectiveDate
+      || normalized.installmentDate
+      || normalized.submissionEffectiveDate
+      || '';
+    const installmentAmount = parseExecutionAmount(
+      normalized.installmentAmount
+      ?? normalized.amount
+      ?? normalized.baseAmount
+    );
+    return {
+      ...normalized,
+      effectiveDate,
+      installmentAmount,
+      installments: Number(normalized.installments || normalized.installmentNumber || 1) || 1,
+      sourceId: normalized.sourceId || `execution-upload-${idx + 1}`
+    };
+  };
+
+  const validateExecutionColumns = (rows) => {
+    const requiredColumns = validateRequiredColumns(rows, required.execution || []);
+    if (!requiredColumns.valid) return requiredColumns;
+    const keys = Object.keys(rows[0] || {});
+    if (!keys.includes('effectiveDate')) {
+      return { valid: false, errors: ['Missing required date column. Expected Effective Date or Install Effdt field.'] };
+    }
+    return { valid: true, errors: [] };
+  };
 
   const parseExecutionFile = async (file) => {
     const lowerName = file.name.toLowerCase();
     if (lowerName.endsWith('.csv')) {
-      return parseCSV(await file.text()).map(normalizeRowHeaders);
+      return parseCSV(await file.text()).map(normalizeExecutionRow);
     }
     if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
       const XLSX = window.XLSX;
@@ -221,7 +273,7 @@ function bindExecutionDashboardActions() {
         return ['execution', 'executionapprovaldata', 'executiondata', 'approvaldata'].includes(normalized);
       }) || workbook.SheetNames[0];
       const sheet = workbook.Sheets[executionSheet];
-      return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false }).map(normalizeRowHeaders);
+      return XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false }).map(normalizeExecutionRow);
     }
     throw new Error('Invalid file type. Upload a Bonus Execution CSV or Excel file.');
   };
@@ -237,23 +289,25 @@ function bindExecutionDashboardActions() {
       const validation = validateExecutionColumns(rows);
       if (!validation.valid) {
         setExecutionUploadError(dashboardState, `Validation failed: ${validation.errors.join('; ')}`, file.name);
-        return;
+        return false;
       }
       setRawExecutionRows(dashboardState, rows, file.name);
+      return true;
     } catch (error) {
       setExecutionUploadError(dashboardState, error?.message || 'Unable to read or parse Bonus Execution file.', file.name);
+      return false;
     }
   };
 
   const handleTransformExecutionData = () => {
     const dashboardState = store.state.ui?.executionDashboard || {};
-    const rawRows = dashboardState.rawRows || [];
+    const rawRows = getRuntimeDashboardState().rawRows || [];
     if (!rawRows.length) {
       store.patchUi({
         executionDashboard: {
           ...dashboardState,
           hasTransformed: false,
-          transformedRows: [],
+          transformedRowCount: 0,
           issues: ['Upload Bonus Execution data before running transforms.']
         }
       });
@@ -261,11 +315,15 @@ function bindExecutionDashboardActions() {
     }
     const mapped = applyCrosswalk(rawRows, store.state.crosswalk || []);
     const result = transformExecutionToPayoutSchedule(mapped, store.state.settings?.fyStartMonth || 10);
+    patchRuntimeDashboardState({
+      ...getRuntimeDashboardState(),
+      transformedRows: result.rows
+    });
     store.patchUi({
       executionDashboard: {
         ...dashboardState,
-        transformedRows: result.rows,
-        issues: result.issues || [],
+        transformedRowCount: result.rows.length,
+        issues: result.issues || [`Rows transformed successfully: ${result.rows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
       }
@@ -276,8 +334,8 @@ function bindExecutionDashboardActions() {
   if (uploadInput) {
     uploadInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
-      await handleExecutionFileSelected(file);
-      uploadInput.value = '';
+      const loaded = await handleExecutionFileSelected(file);
+      if (loaded) uploadInput.value = '';
     });
   }
 
@@ -405,6 +463,7 @@ function bindTableHandlers() {
 }
 
 function render() {
+  if (!app) return;
   const route = currentRoute();
   const fn = pageMap[route] || overviewPage;
   app.innerHTML = renderLayout(route, fn(store.state));
