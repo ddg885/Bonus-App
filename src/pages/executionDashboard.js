@@ -52,6 +52,11 @@ function emptyState(rawCount) {
   return `<section class="panel"><h3>Execution Summary</h3><p class="empty">${guidance}</p></section>`;
 }
 
+function detailColumns(rows) {
+  const first = rows[0] || {};
+  return Object.keys(first).map((key) => ({ key, label: key }));
+}
+
 export function executionDashboardPage(state) {
   const dashboardState = state.ui?.executionDashboard || {};
   const runtimeState = state.executionDashboardRuntime || {};
@@ -67,56 +72,73 @@ export function executionDashboardPage(state) {
   const topBli = groupedAmount(filtered, 'budgetLineItem').sort((a, b) => b.value - a.value).slice(0, 10);
 
   return `
-    <div class="page-header"><div><h2>Execution Dashboard</h2><p>Review transformed execution outcomes with interactive filtering and exports.</p></div></div>
-    <section class="panel">
-      <h3>Bonus Execution Data</h3>
-      <div class="intake-toolbar-left">
-        <label>Upload Bonus Execution File
-          <input id="execution-dashboard-upload" type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
-        </label>
-        <button id="execution-transform-btn" class="primary-btn" ${rawRows.length ? '' : 'disabled'}>Transform Data</button>
-        <button id="dashboard-clear-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear Filters</button>
-      </div>
-      <div class="dataset-status">
-        <div><strong>Selected File</strong> <span>${fileName || 'None selected'}</span></div>
-        <div><strong>Raw Rows Loaded</strong> <span>${rawRowCount}</span></div>
-        <div><strong>Transformed Rows</strong> <span>${hasTransformed ? transformedRowCount : 0}</span></div>
-      </div>
-      ${issues.length ? `<p class="danger">${issues.map((issue) => (typeof issue === 'string' ? issue : issue?.message || JSON.stringify(issue))).join(' | ')}</p>` : ''}
-      <p class="muted">This page only supports Bonus Execution data. Upload only stores raw rows; dashboard metrics/charts render after you click Transform Data.</p>
-    </section>
-    <section class="panel">
-      <h3>Filters</h3>
-      <div class="filter-grid">
-        ${renderFilter('Approval Flag', 'status', transformedRows, f)}
-        ${renderFilter('Category', 'category', transformedRows, f)}
-        ${renderFilter('Budget Line Item', 'budgetLineItem', transformedRows, f)}
-        ${renderFilter('O/E', 'oe', transformedRows, f)}
-        ${renderFilter('Payout FY', 'payoutFy', transformedRows, f)}
-        ${renderFilter('Payout', 'payoutType', transformedRows, f)}
-        <label>Search<input data-dashboard-search type="search" value="${f.search || ''}" placeholder="Search all fields" ${hasTransformed ? '' : 'disabled'} /></label>
-      </div>
-    </section>
-    ${hasTransformed ? `
-      ${metricCards([
-        { label: 'Filtered Records', value: filtered.length },
-        { label: 'Filtered Amount', value: filtered.reduce((a, r) => a + Number(r.amount || 0), 0), currency: true },
-        { label: 'Distinct Source Rows', value: new Set(filtered.map((r) => r.sourceId)).size }
-      ])}
-      <div class="grid-two">${barList('Amount by Payout FY', groupedAmount(filtered, 'payoutFy'))}${barList('Amount by Category', groupedAmount(filtered, 'category'))}</div>
-      <div class="grid-two">${barList('Amount by Approval Flag', groupedAmount(filtered, 'status'))}${barList('Amount by Payout', groupedAmount(filtered, 'payoutType'))}</div>
-      ${barList('Amount by O/E', groupedAmount(filtered, 'oe'))}
-      ${interactiveTable({
-        title: 'Top Budget Line Items',
-        tableId: 'execution-top-budget-line-items',
-        rows: topBli,
-        exportName: 'execution-top-budget-line-items.csv',
-        ui: state.ui.tables?.['execution-top-budget-line-items'],
-        columns: [
-          { key: 'label', label: 'Budget Line Item' },
-          { key: 'value', label: 'Amount' }
-        ]
-      })}
-    ` : emptyState(rawRowCount)}
+    <div class="execution-dashboard">
+      <div class="page-header execution-dashboard-header"><div><h2>Execution Dashboard</h2><p>Review transformed execution outcomes with interactive filtering and exports.</p></div></div>
+      <section class="panel">
+        <h3>Bonus Execution Data</h3>
+        <div class="intake-toolbar-left">
+          <label>Upload Bonus Execution File
+            <input id="execution-dashboard-upload" type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+          </label>
+          <button id="execution-transform-btn" class="primary-btn" ${rawRows.length ? '' : 'disabled'}>Transform Data</button>
+          <button id="dashboard-clear-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear Filters</button>
+        </div>
+        <div class="dataset-status">
+          <div><strong>Selected File</strong> <span>${fileName || 'None selected'}</span></div>
+          <div><strong>Raw Rows Loaded</strong> <span>${rawRowCount}</span></div>
+          <div><strong>Transformed Rows</strong> <span>${hasTransformed ? transformedRowCount : 0}</span></div>
+        </div>
+        ${issues.length ? `<p class="danger">${issues.map((issue) => (typeof issue === 'string' ? issue : issue?.message || JSON.stringify(issue))).join(' | ')}</p>` : ''}
+        <p class="muted">This page only supports Bonus Execution data. Upload only stores raw rows; dashboard metrics/charts render after you click Transform Data.</p>
+      </section>
+      <section class="panel">
+        <h3>Filters</h3>
+        <div class="filter-grid">
+          ${renderFilter('Approval Flag', 'status', transformedRows, f)}
+          ${renderFilter('Category', 'category', transformedRows, f)}
+          ${renderFilter('Budget Line Item', 'budgetLineItem', transformedRows, f)}
+          ${renderFilter('O/E', 'oe', transformedRows, f)}
+          ${renderFilter('Payout FY', 'payoutFy', transformedRows, f)}
+          ${renderFilter('Payout', 'payoutType', transformedRows, f)}
+          <label>Search<input data-dashboard-search type="search" value="${f.search || ''}" placeholder="Search all fields" ${hasTransformed ? '' : 'disabled'} /></label>
+        </div>
+      </section>
+      ${hasTransformed ? `
+        <div class="execution-kpi-stack">
+          ${metricCards([
+            { label: 'Filtered Records', value: filtered.length },
+            { label: 'Filtered Amount', value: filtered.reduce((a, r) => a + Number(r.amount || 0), 0), currency: true },
+            { label: 'Distinct Source Rows', value: new Set(filtered.map((r) => r.sourceId)).size }
+          ])}
+        </div>
+        <div class="execution-chart-stack">
+          ${barList('Amount by Payout FY', groupedAmount(filtered, 'payoutFy'))}
+          ${barList('Amount by Category', groupedAmount(filtered, 'category'))}
+          ${barList('Amount by Approval Flag', groupedAmount(filtered, 'status'))}
+          ${barList('Amount by Payout', groupedAmount(filtered, 'payoutType'))}
+          ${barList('Amount by O/E', groupedAmount(filtered, 'oe'))}
+        </div>
+        ${interactiveTable({
+          title: 'Top Budget Line Items',
+          tableId: 'execution-top-budget-line-items',
+          rows: topBli,
+          exportName: 'execution-top-budget-line-items.csv',
+          ui: state.ui.tables?.['execution-top-budget-line-items'],
+          columns: [
+            { key: 'label', label: 'Budget Line Item' },
+            { key: 'value', label: 'Amount' }
+          ]
+        })}
+        ${interactiveTable({
+          title: 'Detail Rows',
+          tableId: 'execution-detail-rows',
+          rows: filtered,
+          exportName: 'execution-detail-rows.csv',
+          ui: state.ui.tables?.['execution-detail-rows'],
+          columns: detailColumns(filtered),
+          defaultPageSize: 10
+        })}
+      ` : emptyState(rawRowCount)}
+    </div>
   `;
 }
