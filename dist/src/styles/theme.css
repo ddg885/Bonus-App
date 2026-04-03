@@ -103,7 +103,6 @@ input[type='file'] {
 .page-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .page-header h2 { margin: 0 0 8px; }
 .page-header p, .muted, .subtle, .last-rebuild, .empty { color: var(--muted); }
-.danger { color: var(--negative); }
 
 .panel, .chart-panel, .hero-panel, .table-panel {
   background: var(--surface);
@@ -146,16 +145,6 @@ button {
 .secondary-btn,
 button { background: var(--primary-soft); color: var(--primary); }
 .danger-btn { background: var(--negative-soft); color: var(--negative); }
-
-.primary-btn:disabled,
-.secondary-btn:disabled,
-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.success-panel { border-left: 5px solid var(--positive); background: linear-gradient(180deg, #fff, var(--positive-soft)); }
-.error-panel { border-left: 5px solid var(--negative); background: linear-gradient(180deg, #fff, var(--negative-soft)); }
 
 .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 6px 12px; font-size: 0.82rem; font-weight: 700; }
 .badge.positive { background: var(--positive-soft); color: var(--positive); }

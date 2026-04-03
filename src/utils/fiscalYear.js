@@ -19,11 +19,3 @@ export function addYears(dateInput, years) {
   d.setUTCFullYear(d.getUTCFullYear() + years);
   return d.toISOString().slice(0, 10);
 }
-
-export function fiscalYear(dateInput) {
-  const date = new Date(dateInput);
-  if (Number.isNaN(date.getTime())) return null;
-  const month = date.getUTCMonth() + 1;
-  const year = date.getUTCFullYear();
-  return month >= 10 ? year + 1 : year;
-}

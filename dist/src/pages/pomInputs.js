@@ -1,6 +1,9 @@
+import { interactiveTable } from '../components/table.js';
+import { uploadZone } from '../components/uploadZone.js';
 import { statusBadge } from '../components/cards.js';
 
 const datasets = [
+  ['execution', 'Execution / Approval Data'],
   ['bonusInfo', 'Bonus Info Table'],
   ['targetAverage', 'Target Average Initial Bonus Table'],
   ['controls', 'Controls Table'],
@@ -8,79 +11,26 @@ const datasets = [
   ['crosswalk', 'Crosswalk Table']
 ];
 
-function tableRows(state, key) {
-  return state.workingInputs?.[key] || [];
-}
-
-function getFiscalColumns(rows, sourceKey) {
-  const fySet = new Set();
-  rows.forEach((row) => {
-    Object.keys(row?.[sourceKey] || {}).forEach((fy) => fySet.add(fy));
-  });
-  return Array.from(fySet).sort();
-}
-
-function editableTable(state, key, title, columns) {
-  const rows = tableRows(state, key);
+function editableMiniTable(state, key, title, columns) {
+  const rows = (state[key] || []).slice(0, 20);
   if (!rows.length) return `<section class="panel"><h3>${title}</h3><p class="empty">No rows loaded.</p></section>`;
   const head = columns.map((c) => `<th>${c.label}</th>`).join('');
-  const body = rows.map((r, idx) => `<tr>${columns.map((c) => `<td contenteditable="true" data-edit-cell="${key}" data-row="${idx}" data-col="${c.key}">${c.value ? c.value(r) : (r[c.key] ?? '')}</td>`).join('')}</tr>`).join('');
-  return `<section class="panel"><h3>${title}</h3><div class="table-wrap"><table class="data-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div><p class="muted">Inline edits update working state immediately; click Commit Changes to apply globally.</p></section>`;
-}
-
-function renderNotice(notice) {
-  if (!notice?.message) return '';
-  return `<section class="panel ${notice.type === 'error' ? 'error-panel' : 'success-panel'}"><strong>${notice.type === 'error' ? 'Error:' : 'Success:'}</strong> ${notice.message}</section>`;
-}
-
-function hasWorkingDiff(state) {
-  return datasets.some(([key]) => JSON.stringify(state.workingInputs?.[key] || []) !== JSON.stringify(state[key] || []));
+  const body = rows.map((r, idx) => `<tr>${columns.map((c) => `<td contenteditable="true" data-edit-cell="${key}" data-row="${idx}" data-col="${c.key}">${r[c.key] ?? ''}</td>`).join('')}</tr>`).join('');
+  return `<section class="panel"><h3>${title} <small>(inline editable sample)</small></h3><p class="muted">Editing persists locally. For bulk updates, import CSV.</p><div class="table-wrap"><table class="data-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div></section>`;
 }
 
 export function pomInputsPage(state) {
   const status = state.inputStatus;
-  const notice = state.ui?.pomInputs?.notice;
-
-  const targetFy = getFiscalColumns(tableRows(state, 'targetAverage'), 'targetsByFy');
-  const aggregateFy = getFiscalColumns(tableRows(state, 'aggregateTakers'), 'takersByFy');
-  const controlsFy = getFiscalColumns(tableRows(state, 'controls'), 'controlsByFy');
-
-  const commitDisabled = !hasWorkingDiff(state);
-
   return `
-    <div class="page-header"><div><h2>Inputs and Planning Tables</h2><p>Manage working table edits, upload Excel workbooks, and commit approved changes to the global model.</p></div></div>
-    ${renderNotice(notice)}
-    <section class="panel">
-      <h3>Working State Actions</h3>
-      <div class="intake-toolbar-left">
-        <label>Upload Workbook (.xlsx, .xls)
-          <input id="workbook-upload-input" type="file" accept=".xlsx,.xls" />
-        </label>
-        <button id="commit-inputs-btn" class="primary-btn" ${commitDisabled ? 'disabled' : ''}>Commit Changes</button>
-      </div>
-      <p class="muted">Workbook uploads replace only the working tables on this page after full validation.</p>
-    </section>
+    <div class="page-header"><div><h2>POM Inputs and Editable Planning Tables</h2><p>Manage source datasets while preserving current parsing, validation, and transformation behavior.</p></div></div>
     <section class="panel"><h3>Dataset Status</h3><div class="dataset-status">${datasets.map(([k, label]) => `<div><strong>${label}</strong> ${statusBadge(status[k] ? 'Loaded' : 'Missing', status[k] ? 'positive' : 'warning')} <button class="secondary-btn" data-export-dataset="${k}">Export</button></div>`).join('')}</div></section>
-    ${editableTable(state, 'bonusInfo', 'Bonus Info Table', [
-
+    <div class="grid-three">${datasets.map(([k, label]) => uploadZone(k, label, status[k])).join('')}</div>
+    ${editableMiniTable(state, 'bonusInfo', 'Bonus Info', [
       { key: 'budgetLineItem', label: 'BLI' }, { key: 'category', label: 'Category' }, { key: 'oe', label: 'O/E' }, { key: 'bonusType', label: 'Bonus Type' }, { key: 'amount', label: 'Amount' }, { key: 'installments', label: 'Installments' }, { key: 'initialPaymentPct', label: 'Initial %' }, { key: 'anniversaryPaymentPct', label: 'Anniversary %' }
     ])}
-    ${editableTable(state, 'targetAverage', 'Target Average Initial Bonus Table', [
-      { key: 'category', label: 'Category' },
-      ...targetFy.map((fy) => ({ key: `targetsByFy.${fy}`, label: fy, value: (row) => row.targetsByFy?.[fy] ?? '' }))
-    ])}
-    ${editableTable(state, 'controls', 'Controls Table', [
-      { key: 'budgetLineItem', label: 'BLI' },
-      { key: 'category', label: 'Category' },
-      { key: 'oe', label: 'O/E' },
-      { key: 'bonusType', label: 'Bonus Type' },
-      ...controlsFy.map((fy) => ({ key: `controlsByFy.${fy}`, label: fy, value: (row) => row.controlsByFy?.[fy] ?? '' }))
-    ])}
-    ${editableTable(state, 'aggregateTakers', 'Aggregate Initial Takers Table', [
-      { key: 'category', label: 'Category' },
-      ...aggregateFy.map((fy) => ({ key: `takersByFy.${fy}`, label: fy, value: (row) => row.takersByFy?.[fy] ?? '' }))
-    ])}
-    ${editableTable(state, 'crosswalk', 'Crosswalk Table', [
+    ${interactiveTable({ title: 'Target Average Initial Bonus', tableId: 'target-average', rows: state.targetAverage, ui: state.ui.tables?.['target-average'], columns: [{ key: 'category', label: 'Category' }, { key: 'targetsByFy', label: 'FY Targets' }] })}
+    ${interactiveTable({ title: 'Aggregate Initial Takers', tableId: 'aggregate-takers', rows: state.aggregateTakers, ui: state.ui.tables?.['aggregate-takers'], columns: [{ key: 'category', label: 'Category' }, { key: 'takersByFy', label: 'FY Takers' }] })}
+    ${editableMiniTable(state, 'crosswalk', 'Crosswalk Rules Editor', [
       { key: 'matchField', label: 'Match Field' }, { key: 'matchValue', label: 'Raw Code' }, { key: 'category', label: 'Category' }, { key: 'budgetLineItem', label: 'BLI' }, { key: 'oe', label: 'O/E' }, { key: 'bonusType', label: 'Bonus Type' }, { key: 'priority', label: 'Priority' }
     ])}
   `;
