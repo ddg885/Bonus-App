@@ -13,8 +13,6 @@ import { parseCSV, toCSV } from './utils/csv.js';
 import { findFiscalYearColumns, normalizeRowHeaders } from './utils/headerNormalization.js';
 import { validateRequiredColumns } from './utils/validation.js';
 import { parsePlanningWorkbook } from './utils/workbook.js';
-import { applyCrosswalk } from './core/crosswalk.js';
-import { transformExecutionToPayoutSchedule } from './core/transformation.js';
 
 const app = document.getElementById('app');
 const INPUTS_ROUTE = 'Inputs and Planning Tables';
@@ -39,6 +37,29 @@ const required = {
   aggregateTakers: ['category'],
   crosswalk: ['matchField', 'matchValue', 'category', 'budgetLineItem', 'oe', 'bonusType']
 };
+
+const EXECUTION_CROSSWALK = new Map([
+  ['EAB', { bonusType: 'Affiliation', category: 'PS', grouped: 'Prior Svc SELRES' }],
+  ['ENB', { bonusType: 'Affiliation', category: 'PS', grouped: 'Prior Svc SELRES' }],
+  ['NAT', { bonusType: 'Accession', category: 'NAT', grouped: 'EB SELRES' }],
+  ['OAC', { bonusType: 'Accession', category: 'DCO', grouped: 'Officer Affiliation/Accession Bonus' }],
+  ['OAF', { bonusType: 'Affiliation', category: 'NAVET', grouped: 'Officer Affiliation/Accession Bonus' }],
+  ['R10', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R12', { bonusType: 'Retention', category: 'GENOFF-RET', grouped: 'Officer Retention Bonus' }],
+  ['R15', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R17', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R20', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R25', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R30', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R35', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R40', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R45', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R50', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R60', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['R75', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
+  ['REENL', { bonusType: 'Retention', category: 'SRB SELRES', grouped: 'SRB SELRES' }],
+  ['S12', { bonusType: 'Retention', category: 'GENOFF-RET', grouped: 'Officer Retention Bonus' }]
+]);
 
 function currentRoute() {
   const hash = decodeURIComponent(location.hash.replace('#', ''));
@@ -229,6 +250,111 @@ function bindExecutionDashboardActions() {
     return Number.isFinite(parsed) ? parsed : null;
   };
 
+  const parseIntSafe = (value) => {
+    if (value == null || value === '') return null;
+    if (typeof value === 'number') return Number.isFinite(value) ? Math.trunc(value) : null;
+    const cleaned = String(value).replace(/[^0-9-]/g, '');
+    if (!cleaned) return null;
+    const parsed = Number.parseInt(cleaned, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const parseDate = (value) => {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+    const parsed = new Date(String(value).trim());
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const cleanBonusRating = (value) => String(value || '').trim().replace(/\s+/g, '');
+
+  const fyFromDate = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+    return date.getMonth() + 1 >= 10 ? date.getFullYear() + 1 : date.getFullYear();
+  };
+
+  const applyTransforms = (rows) => {
+    const transformed = rows
+      .map((r) => {
+        const code = String(r['Mbr Reserve Bonus Subm Category Code'] || r.rawTypeCode || '').trim() || null;
+        const cw = EXECUTION_CROSSWALK.get(code) || {};
+        const installNum = parseIntSafe(r['Mbr Reserve Bonus Subm Install Num'] ?? r.installmentNumber) || 1;
+        const approvalDate = parseDate(r['Mbr Reserve Bonus Subm Install Process Dttm']);
+        const dueDate = parseDate(r['Mbr Reserve Bonus Subm Effective Date'] ?? r.effectiveDate);
+        const designator = parseIntSafe(r['Mbr Reserve Bonus Subm Desig Cd'] ?? r.officerDesignator);
+        const rating = cleanBonusRating(r['Mbr Reserve Bonus Subm Rate Rank'] ?? r.rateRank);
+        const ratingDesignator = String(rating || '') + String(designator || '');
+        const oe = !ratingDesignator || !String(ratingDesignator).trim()
+          ? 'Enlisted'
+          : /^\d/.test(String(ratingDesignator).trim())
+            ? 'Officer'
+            : 'Enlisted';
+        const payout = installNum > 1 ? 'Anniversary' : 'Initial';
+        const grouped = cw.grouped || String(r['Mbr Reserve Bonus Subm Category'] || r.category || '').trim() || '(blank)';
+        let payoutFY = null;
+        if (approvalDate) {
+          payoutFY = fyFromDate(approvalDate);
+        } else if (dueDate) {
+          payoutFY = dueDate.getMonth() + 1 >= 10
+            ? dueDate.getFullYear() + installNum
+            : dueDate.getFullYear() + (installNum - 1);
+        }
+
+        return {
+          Name: r['Member Name'] || '',
+          'Bonus Tracking Num': r['Mbr Reserve Bonus Subm Track Num Actual'] || r.trackNumActual || '',
+          Category: cw.category || r['Mbr Reserve Bonus Subm Category'] || r.category || '',
+          'Bonus Type': cw.bonusType || '',
+          'Approval Flag': approvalDate ? 'Approved' : 'Committed',
+          O_E: oe,
+          'Payout FY': payoutFY,
+          Payout: payout,
+          'Installment Number': installNum,
+          'Installment Amount': parseExecutionAmount(r['Mbr Reserve Bonus Subm Install Amount'] ?? r.installmentAmount) || 0,
+          'Budget Line Item Grouped': grouped,
+          'Budget Line Item': `${grouped} ${payout}`.trim(),
+          'Mbr Reserve Bonus Subm Category Code': code,
+          'Bonus Installment Status Ind': String(
+            r['Bonus Installment Status Ind']
+            ?? r['Mbr Reserve Bonus Subm Install Stat Ind']
+            ?? ''
+          ),
+          'Approval Date': approvalDate,
+          'Due Date': dueDate,
+          sourceId: r.sourceId || '',
+          status: approvalDate ? 'Approved' : 'Committed',
+          category: cw.category || r['Mbr Reserve Bonus Subm Category'] || r.category || '',
+          budgetLineItem: `${grouped} ${payout}`.trim(),
+          budgetLineItemGrouped: grouped,
+          oe,
+          bonusType: cw.bonusType || '',
+          payoutFy: payoutFY,
+          payoutType: payout,
+          amount: parseExecutionAmount(r['Mbr Reserve Bonus Subm Install Amount'] ?? r.installmentAmount) || 0
+        };
+      })
+      .filter((row) => !['SRB10', 'SRB15'].includes(String(row['Mbr Reserve Bonus Subm Category Code'] || '').trim()))
+      .filter((row) => ['P', 'S', ' '].includes(String(row['Bonus Installment Status Ind'] ?? '')));
+
+    const groupedPayouts = transformed.reduce((acc, row) => {
+      const key = row['Budget Line Item Grouped'] || '(blank)';
+      if (!acc[key]) acc[key] = new Set();
+      acc[key].add(row.Payout);
+      return acc;
+    }, {});
+
+    return transformed.map((row) => {
+      const key = row['Budget Line Item Grouped'] || '(blank)';
+      const hasBoth = groupedPayouts[key]?.has('Initial') && groupedPayouts[key]?.has('Anniversary');
+      const combined = hasBoth ? key : row['Budget Line Item'];
+      return {
+        ...row,
+        'Budget Line Item Combined': combined,
+        budgetLineItemCombined: combined
+      };
+    });
+  };
+
   const normalizeExecutionRow = (row, idx) => {
     const normalized = normalizeRowHeaders(row);
     const effectiveDate = normalized.effectiveDate
@@ -313,17 +439,16 @@ function bindExecutionDashboardActions() {
       });
       return;
     }
-    const mapped = applyCrosswalk(rawRows, store.state.crosswalk || []);
-    const result = transformExecutionToPayoutSchedule(mapped, store.state.settings?.fyStartMonth || 10);
+    const resultRows = applyTransforms(rawRows);
     patchRuntimeDashboardState({
       ...getRuntimeDashboardState(),
-      transformedRows: result.rows
+      transformedRows: resultRows
     });
     store.patchUi({
       executionDashboard: {
         ...dashboardState,
-        transformedRowCount: result.rows.length,
-        issues: result.issues || [`Rows transformed successfully: ${result.rows.length}`],
+        transformedRowCount: resultRows.length,
+        issues: [`Rows transformed successfully: ${resultRows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
       }

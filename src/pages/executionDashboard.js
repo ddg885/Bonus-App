@@ -33,7 +33,7 @@ function applyFilters(rows, f = {}) {
     return matchesSearch
       && inSet('status', r.status)
       && inSet('category', r.category)
-      && inSet('budgetLineItem', r.budgetLineItem)
+      && inSet('budgetLineItemCombined', r.budgetLineItemCombined || r.budgetLineItem)
       && inSet('oe', r.oe)
       && inSet('payoutFy', r.payoutFy)
       && inSet('payoutType', r.payoutType);
@@ -54,7 +54,11 @@ function emptyState(rawCount) {
 
 function detailColumns(rows) {
   const first = rows[0] || {};
-  return Object.keys(first).map((key) => ({ key, label: key }));
+  return Object.keys(first).map((key) => (
+    key === 'budgetLineItemCombined'
+      ? { key, label: 'Budget Line Item' }
+      : { key, label: key }
+  ));
 }
 
 export function executionDashboardPage(state) {
@@ -69,7 +73,7 @@ export function executionDashboardPage(state) {
   const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
-  const topBli = groupedAmount(filtered, 'budgetLineItem').sort((a, b) => b.value - a.value).slice(0, 10);
+  const topBli = groupedAmount(filtered, 'budgetLineItemCombined').sort((a, b) => b.value - a.value).slice(0, 10);
 
   return `
     <div class="execution-dashboard">
@@ -96,7 +100,7 @@ export function executionDashboardPage(state) {
         <div class="filter-grid">
           ${renderFilter('Approval Flag', 'status', transformedRows, f)}
           ${renderFilter('Category', 'category', transformedRows, f)}
-          ${renderFilter('Budget Line Item', 'budgetLineItem', transformedRows, f)}
+          ${renderFilter('Budget Line Item', 'budgetLineItemCombined', transformedRows, f)}
           ${renderFilter('O/E', 'oe', transformedRows, f)}
           ${renderFilter('Payout FY', 'payoutFy', transformedRows, f)}
           ${renderFilter('Payout', 'payoutType', transformedRows, f)}
