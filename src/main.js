@@ -367,7 +367,14 @@ function bindExecutionDashboardActions() {
         };
       })
       .filter((row) => !['SRB10', 'SRB15'].includes(String(row['Mbr Reserve Bonus Subm Category Code'] || '').trim()))
-      .filter((row) => ['P', 'S', ' '].includes(String(row['Bonus Installment Status Ind'] ?? '')));
+      .filter((row) => {
+        if (row['Approval Flag'] === 'Committed' || row.status === 'Committed') {
+          return true;
+        }
+
+        const status = String(row['Bonus Installment Status Ind'] ?? '').trim();
+        return ['P', 'S', ''].includes(status);
+      });
 
     const groupedPayouts = transformed.reduce((acc, row) => {
       const key = row['Budget Line Item Grouped'] || '(blank)';
