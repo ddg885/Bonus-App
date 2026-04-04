@@ -14,6 +14,20 @@ function groupedAmount(rows, key) {
   }, {})).map(([label, value]) => ({ label, value: Number(value.toFixed(2)) }));
 }
 
+function normalizeExecutiveCategory(label) {
+  const trimmed = String(label || '').trim();
+  if (/^HPO(\s|[-_/]|$)/i.test(trimmed)) return 'HPO';
+  return trimmed || 'UNKNOWN';
+}
+
+function sortPayoutFy(data) {
+  return [...data].sort((a, b) => Number(a.label) - Number(b.label));
+}
+
+function sortByValueDesc(data) {
+  return [...data].sort((a, b) => b.value - a.value);
+}
+
 function options(values, selected = []) {
   return values.map((v) => `<option value="${v}" ${selected.includes(v) ? 'selected' : ''}>${v}</option>`).join('');
 }
@@ -74,6 +88,10 @@ export function executionDashboardPage(state) {
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
   const topBli = groupedAmount(filtered, 'budgetLineItemCombined').sort((a, b) => b.value - a.value).slice(0, 10);
+  const payoutFyData = sortPayoutFy(groupedAmount(filtered, 'payoutFy'));
+  const categoryData = sortByValueDesc(
+    groupedAmount(filtered.map((row) => ({ ...row, category: normalizeExecutiveCategory(row.category) })), 'category')
+  );
 
   return `
     <div class="execution-dashboard">
@@ -115,33 +133,32 @@ export function executionDashboardPage(state) {
             { label: 'Distinct Source Rows', value: new Set(filtered.map((r) => r.sourceId)).size }
           ])}
         </div>
-        <div class="execution-chart-stack">
-          ${barList('Amount by Payout FY', groupedAmount(filtered, 'payoutFy'))}
-          ${barList('Amount by Category', groupedAmount(filtered, 'category'))}
-          ${barList('Amount by Approval Flag', groupedAmount(filtered, 'status'))}
-          ${barList('Amount by Payout', groupedAmount(filtered, 'payoutType'))}
-          ${barList('Amount by O/E', groupedAmount(filtered, 'oe'))}
+        <div class="execution-chart-row">
+          ${barList('Amount by Payout FY', payoutFyData)}
+          ${barList('Amount by Category', categoryData)}
         </div>
-        ${interactiveTable({
-          title: 'Top Budget Line Items',
-          tableId: 'execution-top-budget-line-items',
-          rows: topBli,
-          exportName: 'execution-top-budget-line-items.csv',
-          ui: state.ui.tables?.['execution-top-budget-line-items'],
-          columns: [
-            { key: 'label', label: 'Budget Line Item' },
-            { key: 'value', label: 'Amount' }
-          ]
-        })}
-        ${interactiveTable({
-          title: 'Detail Rows',
-          tableId: 'execution-detail-rows',
-          rows: filtered,
-          exportName: 'execution-detail-rows.csv',
-          ui: state.ui.tables?.['execution-detail-rows'],
-          columns: detailColumns(filtered),
-          defaultPageSize: 10
-        })}
+        <div class="execution-table-row">
+          ${interactiveTable({
+            title: 'Top Budget Line Items',
+            tableId: 'execution-top-budget-line-items',
+            rows: topBli,
+            exportName: 'execution-top-budget-line-items.csv',
+            ui: state.ui.tables?.['execution-top-budget-line-items'],
+            columns: [
+              { key: 'label', label: 'Budget Line Item' },
+              { key: 'value', label: 'Amount' }
+            ]
+          })}
+          ${interactiveTable({
+            title: 'Detail Rows',
+            tableId: 'execution-detail-rows',
+            rows: filtered,
+            exportName: 'execution-detail-rows.csv',
+            ui: state.ui.tables?.['execution-detail-rows'],
+            columns: detailColumns(filtered),
+            defaultPageSize: 10
+          })}
+        </div>
       ` : emptyState(rawRowCount)}
     </div>
   `;
