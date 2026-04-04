@@ -43,7 +43,11 @@ function applyFilters(rows, f = {}) {
   return rows.filter((r) => {
     const text = (f.search || '').toLowerCase();
     const matchesSearch = !text || JSON.stringify(r).toLowerCase().includes(text);
-    const inSet = (k, val) => !(f[k]?.length) || f[k].includes(val || '');
+    const inSet = (k, val) => {
+      const selected = Array.isArray(f[k]) ? f[k].map((item) => String(item ?? '')) : [];
+      const current = String(val ?? '');
+      return !selected.length || selected.includes(current);
+    };
     return matchesSearch
       && inSet('status', r.status)
       && inSet('category', r.category)
