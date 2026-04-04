@@ -38,28 +38,60 @@ const required = {
   crosswalk: ['matchField', 'matchValue', 'category', 'budgetLineItem', 'oe', 'bonusType']
 };
 
-const EXECUTION_CROSSWALK = new Map([
-  ['EAB', { bonusType: 'Affiliation', category: 'PS', grouped: 'Prior Svc SELRES' }],
-  ['ENB', { bonusType: 'Affiliation', category: 'PS', grouped: 'Prior Svc SELRES' }],
-  ['NAT', { bonusType: 'Accession', category: 'NAT', grouped: 'EB SELRES' }],
-  ['OAC', { bonusType: 'Accession', category: 'DCO', grouped: 'Officer Affiliation/Accession Bonus' }],
-  ['OAF', { bonusType: 'Affiliation', category: 'NAVET', grouped: 'Officer Affiliation/Accession Bonus' }],
-  ['R10', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R12', { bonusType: 'Retention', category: 'GENOFF-RET', grouped: 'Officer Retention Bonus' }],
-  ['R15', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R17', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R20', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R25', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R30', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R35', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R40', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R45', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R50', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R60', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['R75', { bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' }],
-  ['REENL', { bonusType: 'Retention', category: 'SRB SELRES', grouped: 'SRB SELRES' }],
-  ['S12', { bonusType: 'Retention', category: 'GENOFF-RET', grouped: 'Officer Retention Bonus' }]
-]);
+const DEFAULT_CROSSWALK_ROWS = [
+  { code: 'EAB', bonusType: 'Affiliation', category: 'PS', grouped: 'Prior Svc SELRES' },
+  { code: 'ENB', bonusType: 'Affiliation', category: 'PS', grouped: 'Prior Svc SELRES' },
+  { code: 'NAT', bonusType: 'Accession', category: 'NAT', grouped: 'EB SELRES' },
+  { code: 'OAC', bonusType: 'Accession', category: 'DCO', grouped: 'Officer Affiliation/Accession Bonus' },
+  { code: 'OAF', bonusType: 'Affiliation', category: 'NAVET', grouped: 'Officer Affiliation/Accession Bonus' },
+  { code: 'R10', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R12', bonusType: 'Retention', category: 'GENOFF-RET', grouped: 'Officer Retention Bonus' },
+  { code: 'R15', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R17', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R20', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R25', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R30', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R35', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R40', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R45', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R50', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R60', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'R75', bonusType: 'CWSB', category: 'HPO', grouped: 'Officer Retention Bonus' },
+  { code: 'REENL', bonusType: 'Retention', category: 'SRB SELRES', grouped: 'SRB SELRES' },
+  { code: 'S12', bonusType: 'Retention', category: 'GENOFF-RET', grouped: 'Officer Retention Bonus' }
+];
+
+let crosswalkRows = DEFAULT_CROSSWALK_ROWS.map((r, i) => ({ id: `cw-${i + 1}`, ...r }));
+let crosswalkRowCounter = crosswalkRows.length;
+
+function validateCrosswalkRows(rows) {
+  const seen = new Set();
+  const duplicates = new Set();
+  rows.forEach((row) => {
+    const code = String(row.code || '').trim().toUpperCase();
+    if (!code) return;
+    if (seen.has(code)) duplicates.add(code);
+    seen.add(code);
+  });
+  return {
+    valid: duplicates.size === 0,
+    warning: duplicates.size ? `Duplicate category code(s) detected. Last row wins for: ${Array.from(duplicates).join(', ')}` : ''
+  };
+}
+
+function buildCrosswalkMapFromRows() {
+  const map = new Map();
+  crosswalkRows.forEach((row) => {
+    const code = String(row.code || '').trim().toUpperCase();
+    if (!code) return;
+    map.set(code, {
+      bonusType: String(row.bonusType || '').trim(),
+      category: String(row.category || '').trim(),
+      grouped: String(row.grouped || '').trim()
+    });
+  });
+  return map;
+}
 
 function currentRoute() {
   const hash = decodeURIComponent(location.hash.replace('#', ''));
@@ -274,10 +306,11 @@ function bindExecutionDashboardActions() {
   };
 
   const applyTransforms = (rows) => {
+    const crosswalkMap = buildCrosswalkMapFromRows();
     const transformed = rows
       .map((r) => {
         const code = String(r['Mbr Reserve Bonus Subm Category Code'] || r.rawTypeCode || '').trim() || null;
-        const cw = EXECUTION_CROSSWALK.get(code) || {};
+        const cw = crosswalkMap.get(code) || {};
         const installNum = parseIntSafe(r['Mbr Reserve Bonus Subm Install Num'] ?? r.installmentNumber) || 1;
         const approvalDate = parseDate(r['Mbr Reserve Bonus Subm Install Process Dttm']);
         const dueDate = parseDate(r['Mbr Reserve Bonus Subm Effective Date'] ?? r.effectiveDate);
@@ -538,7 +571,48 @@ function bindInlineEdits() {
   });
 }
 
+function renderCrosswalkTable() {
+  const warning = validateCrosswalkRows(crosswalkRows).warning;
+  const current = store.state.ui?.pomInputs || {};
+  const unchanged = JSON.stringify(current.crosswalkEditorRows || []) === JSON.stringify(crosswalkRows)
+    && (current.crosswalkWarning || '') === warning;
+  if (unchanged) return;
+  store.patchUi({
+    pomInputs: {
+      ...current,
+      crosswalkEditorRows: crosswalkRows,
+      crosswalkWarning: warning
+    }
+  });
+}
+
+function addCrosswalkRow() {
+  crosswalkRowCounter += 1;
+  crosswalkRows = [...crosswalkRows, {
+    id: `cw-${crosswalkRowCounter}`,
+    code: '',
+    bonusType: '',
+    category: '',
+    grouped: ''
+  }];
+  renderCrosswalkTable();
+}
+
+function resetCrosswalkToDefault() {
+  crosswalkRows = DEFAULT_CROSSWALK_ROWS.map((r, i) => ({ id: `cw-${i + 1}`, ...r }));
+  crosswalkRowCounter = crosswalkRows.length;
+  renderCrosswalkTable();
+}
+
+function handleCrosswalkCellChange(rowId, field, value) {
+  crosswalkRows = crosswalkRows.map((row) => (
+    row.id === rowId ? { ...row, [field]: value } : row
+  ));
+  renderCrosswalkTable();
+}
+
 function bindPomInputsActions() {
+  renderCrosswalkTable();
   const commitBtn = document.getElementById('commit-inputs-btn');
   if (commitBtn) {
     commitBtn.addEventListener('click', () => {
@@ -556,6 +630,30 @@ function bindPomInputsActions() {
       workbookInput.value = '';
     });
   }
+
+  const addRowBtn = document.getElementById('crosswalk-add-row-btn');
+  if (addRowBtn) {
+    addRowBtn.addEventListener('click', addCrosswalkRow);
+  }
+
+  const resetBtn = document.getElementById('crosswalk-reset-default-btn');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', resetCrosswalkToDefault);
+  }
+
+  document.querySelectorAll('[data-crosswalk-cell]').forEach((input) => {
+    input.addEventListener('input', () => {
+      handleCrosswalkCellChange(input.dataset.crosswalkRowId, input.dataset.crosswalkCell, input.value);
+    });
+  });
+
+  document.querySelectorAll('[data-crosswalk-delete-row]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const rowId = btn.dataset.crosswalkDeleteRow;
+      crosswalkRows = crosswalkRows.filter((row) => row.id !== rowId);
+      renderCrosswalkTable();
+    });
+  });
 }
 
 function bindAdminActions() {

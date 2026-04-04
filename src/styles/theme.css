@@ -251,7 +251,7 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
 .execution-dashboard .execution-kpi-stack .card-grid,
 .execution-dashboard .execution-chart-stack {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
 }
 .execution-dashboard .execution-kpi-stack .metric-card {
@@ -277,13 +277,26 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
   color: #fff;
   font-size: clamp(1.15rem, 4vw, 1.5rem);
 }
+.execution-dashboard .execution-chart-row,
+.execution-dashboard .execution-table-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+.execution-dashboard .execution-chart-row .chart-panel {
+  min-height: 420px;
+}
 .execution-dashboard .bar-row {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(130px, 1fr) minmax(180px, 2fr) auto;
   gap: 6px;
 }
 .execution-dashboard .bar-row > span,
 .execution-dashboard .bar-row > b {
   color: #fff;
+}
+
+[data-crosswalk-cell] {
+  min-width: 180px;
 }
 
 @media (max-width: 1200px) {
@@ -296,4 +309,8 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
   .grid-three,
   .filter-grid,
   .dataset-status { grid-template-columns: 1fr; }
+  .execution-dashboard .execution-chart-row,
+  .execution-dashboard .execution-table-row {
+    grid-template-columns: 1fr;
+  }
 }

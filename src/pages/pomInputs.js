@@ -37,6 +37,46 @@ function hasWorkingDiff(state) {
   return datasets.some(([key]) => JSON.stringify(state.workingInputs?.[key] || []) !== JSON.stringify(state[key] || []));
 }
 
+function crosswalkEditor(state) {
+  const rows = state.ui?.pomInputs?.crosswalkEditorRows || [];
+  const warning = state.ui?.pomInputs?.crosswalkWarning || '';
+  const body = rows.map((row) => `
+    <tr>
+      <td><input type="text" value="${row.code || ''}" data-crosswalk-cell="code" data-crosswalk-row-id="${row.id}" /></td>
+      <td><input type="text" value="${row.bonusType || ''}" data-crosswalk-cell="bonusType" data-crosswalk-row-id="${row.id}" /></td>
+      <td><input type="text" value="${row.category || ''}" data-crosswalk-cell="category" data-crosswalk-row-id="${row.id}" /></td>
+      <td><input type="text" value="${row.grouped || ''}" data-crosswalk-cell="grouped" data-crosswalk-row-id="${row.id}" /></td>
+      <td><button class="danger-btn" data-crosswalk-delete-row="${row.id}">Delete</button></td>
+    </tr>
+  `).join('');
+
+  return `
+    <section class="panel">
+      <h3>Execution Crosswalk Editor</h3>
+      <div class="intake-toolbar-left">
+        <button id="crosswalk-add-row-btn" class="secondary-btn">Add Crosswalk Row</button>
+        <button id="crosswalk-reset-default-btn" class="secondary-btn">Reset to Default</button>
+      </div>
+      <p class="muted">Execution transforms use the values below for this session.</p>
+      ${warning ? `<p class="danger">${warning}</p>` : ''}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Category Code</th>
+              <th>Bonus Type</th>
+              <th>Category</th>
+              <th>Budget Line Item Grouped</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+}
+
 export function pomInputsPage(state) {
   const status = state.inputStatus;
   const notice = state.ui?.pomInputs?.notice;
@@ -65,6 +105,7 @@ export function pomInputsPage(state) {
 
       { key: 'budgetLineItem', label: 'BLI' }, { key: 'category', label: 'Category' }, { key: 'oe', label: 'O/E' }, { key: 'bonusType', label: 'Bonus Type' }, { key: 'amount', label: 'Amount' }, { key: 'installments', label: 'Installments' }, { key: 'initialPaymentPct', label: 'Initial %' }, { key: 'anniversaryPaymentPct', label: 'Anniversary %' }
     ])}
+    ${crosswalkEditor(state)}
     ${editableTable(state, 'targetAverage', 'Target Average Initial Bonus Table', [
       { key: 'category', label: 'Category' },
       ...targetFy.map((fy) => ({ key: `targetsByFy.${fy}`, label: fy, value: (row) => row.targetsByFy?.[fy] ?? '' }))
