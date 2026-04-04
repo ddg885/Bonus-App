@@ -227,7 +227,7 @@ function bindUploadHandlers() {
 
 
 function bindExecutionDashboardActions() {
-  const getRuntimeDashboardState = () => store.state.executionDashboardRuntime || { rawRows: [], transformedRows: [] };
+  const getRuntimeDashboardState = () => store.state.executionDashboardRuntime || { rawRows: [], transformedRows: [], pendingFileName: '' };
   const patchRuntimeDashboardState = (next) => {
     store.set({ executionDashboardRuntime: next });
   };
@@ -243,12 +243,13 @@ function bindExecutionDashboardActions() {
     patchRuntimeDashboardState({
       ...getRuntimeDashboardState(),
       rawRows: rows,
-      transformedRows: []
+      transformedRows: [],
+      pendingFileName: fileName
     });
     setExecutionDashboardState({
       ...dashboardState,
-      fileName,
-      rawRowCount: rows.length,
+      fileName: '',
+      rawRowCount: 0,
       transformedRowCount: 0,
       hasTransformed: false,
       transformedAt: null,
@@ -260,7 +261,8 @@ function bindExecutionDashboardActions() {
     patchRuntimeDashboardState({
       ...getRuntimeDashboardState(),
       rawRows: [],
-      transformedRows: []
+      transformedRows: [],
+      pendingFileName: ''
     });
     setExecutionDashboardState({
       ...dashboardState,
@@ -467,7 +469,8 @@ function bindExecutionDashboardActions() {
 
   const handleTransformExecutionData = () => {
     const dashboardState = store.state.ui?.executionDashboard || {};
-    const rawRows = getRuntimeDashboardState().rawRows || [];
+    const runtimeState = getRuntimeDashboardState();
+    const rawRows = runtimeState.rawRows || [];
     if (!rawRows.length) {
       store.patchUi({
         executionDashboard: {
@@ -481,26 +484,30 @@ function bindExecutionDashboardActions() {
     }
     const resultRows = applyTransforms(rawRows);
     patchRuntimeDashboardState({
-      ...getRuntimeDashboardState(),
+      ...runtimeState,
       transformedRows: resultRows
     });
     store.patchUi({
       executionDashboard: {
         ...dashboardState,
+        fileName: runtimeState.pendingFileName || '',
+        rawRowCount: rawRows.length,
         transformedRowCount: resultRows.length,
         issues: [`Rows transformed successfully: ${resultRows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
       }
     });
+
+    const uploadInput = document.getElementById('execution-dashboard-upload');
+    if (uploadInput) uploadInput.value = '';
   };
 
   const uploadInput = document.getElementById('execution-dashboard-upload');
   if (uploadInput) {
     uploadInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
-      const loaded = await handleExecutionFileSelected(file);
-      if (loaded) uploadInput.value = '';
+      await handleExecutionFileSelected(file);
     });
   }
 
