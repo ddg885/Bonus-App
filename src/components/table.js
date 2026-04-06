@@ -61,6 +61,8 @@ export function interactiveTable({ title, tableId, rows, columns, ui = {}, stick
     <div class="table-wrap ${sticky ? 'sticky' : ''}"><table class="data-table"><thead><tr>${header}</tr></thead><tbody>${body}</tbody></table></div>
     <p class="muted">Showing ${paged.length} of ${rows.length} rows.</p>
     <script type="application/json" id="table-data-${tableId}">${JSON.stringify(sorted)}</script>
+    <script type="application/json" id="table-columns-${tableId}">${JSON.stringify(columns)}</script>
+    <script type="application/json" id="table-visible-columns-${tableId}">${JSON.stringify(visibleColumns.map((c) => c.key))}</script>
     <script type="application/json" id="table-export-${tableId}">${JSON.stringify(exportName || `${tableId}.csv`)}</script>
   </section>`;
 }
@@ -79,7 +81,14 @@ export function bindInteractiveTables({ uiTables, onUpdate }) {
   document.querySelectorAll('[data-table-col-toggle]').forEach((cb) => {
     cb.addEventListener('change', () => {
       const id = cb.dataset.tableColToggle;
-      const set = new Set(uiTables[id]?.visibleColumns || []);
+      const storedVisible = uiTables[id]?.visibleColumns;
+      const defaultColumns = JSON.parse(
+        document.getElementById(`table-columns-${id}`)?.textContent || '[]'
+      ).map((c) => c.key || c);
+      const baseVisible = Array.isArray(storedVisible) && storedVisible.length
+        ? storedVisible
+        : defaultColumns;
+      const set = new Set(baseVisible);
       if (cb.checked) set.add(cb.value); else set.delete(cb.value);
       onUpdate(id, { ...(uiTables[id] || {}), visibleColumns: Array.from(set), page: 1 });
     });
@@ -104,7 +113,13 @@ export function bindInteractiveTables({ uiTables, onUpdate }) {
       const id = btn.dataset.tableExport;
       const rows = JSON.parse(document.getElementById(`table-data-${id}`)?.textContent || '[]');
       const filename = JSON.parse(document.getElementById(`table-export-${id}`)?.textContent || '"export.csv"');
-      downloadCsv(filename, rows);
+      const visibleKeys = JSON.parse(
+        document.getElementById(`table-visible-columns-${id}`)?.textContent || '[]'
+      );
+      const exportRows = visibleKeys.length
+        ? rows.map((row) => Object.fromEntries(visibleKeys.map((key) => [key, row[key]])))
+        : rows;
+      downloadCsv(filename, exportRows);
     });
   });
 }
