@@ -426,6 +426,12 @@ function bindExecutionDashboardActions() {
         const bonusType = trimText(cw.bonusType);
         const categoryBase = trimText(cw.category || rawCategory);
         const installmentAmount = parseExecutionAmount(r['Mbr Reserve Bonus Subm Install Amount'] ?? r.installmentAmount) || 0;
+        const approvalFlag = approvalDate ? 'Approved' : 'Committed';
+        const rawInstallmentStatus = String(
+          r['Bonus Installment Status Ind']
+          ?? r['Mbr Reserve Bonus Subm Install Stat Ind']
+          ?? ''
+        ).trim();
         let payoutFY = null;
         if (approvalDate) {
           payoutFY = fyFromDate(approvalDate);
@@ -441,7 +447,7 @@ function bindExecutionDashboardActions() {
           'Bonus Tracking Num': trimText(r['Mbr Reserve Bonus Subm Track Num Actual'] || r.trackNumActual || r['Bonus Tracking Num']),
           Category: categoryBase,
           'Bonus Type': bonusType,
-          'Approval Flag': approvalDate ? 'Approved' : 'Committed',
+          'Approval Flag': approvalFlag,
           O_E: oe,
           'Payout FY': payoutFY,
           Payout: payout,
@@ -450,11 +456,7 @@ function bindExecutionDashboardActions() {
           'Budget Line Item Grouped': grouped,
           'Budget Line Item': `${grouped} ${payout}`.trim(),
           'Mbr Reserve Bonus Subm Category Code': code,
-          'Bonus Installment Status Ind': String(
-            r['Bonus Installment Status Ind']
-            ?? r['Mbr Reserve Bonus Subm Install Stat Ind']
-            ?? ''
-          ),
+          'Bonus Installment Status Ind': rawInstallmentStatus,
           'Approval Date': approvalDate,
           'Due Date': dueDate,
           'Installment Due Date': installmentDueDate,
@@ -474,7 +476,7 @@ function bindExecutionDashboardActions() {
           'Current Rating': trimText(r['Current Rating']),
           'Current Designator': trimText(r['Current Designator'] ?? designator),
           sourceId: r.sourceId || '',
-          status: approvalDate ? 'Approved' : 'Committed',
+          status: approvalFlag,
           category: categoryBase,
           budgetLineItem: `${grouped} ${payout}`.trim(),
           budgetLineItemGrouped: grouped,
@@ -490,7 +492,7 @@ function bindExecutionDashboardActions() {
       .filter((row) => !['SRB10', 'SRB15'].includes(String(row['Mbr Reserve Bonus Subm Category Code'] || '').trim()))
       .filter((row) => {
         const status = String(row['Bonus Installment Status Ind'] ?? '').trim();
-        return ['P', 'S', ''].includes(status);
+        return row['Approval Date'] ? ['P', 'S', ''].includes(status) : true;
       });
 
     const withInstallmentKeys = parsedRows.map((row) => ({
