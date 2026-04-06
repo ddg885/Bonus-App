@@ -284,48 +284,148 @@ function bindExecutionDashboardActions() {
     return Number.isFinite(parsed) ? parsed : null;
   };
 
+  const trimText = (value) => (value == null ? '' : String(value).trim());
+  const upperTrimText = (value) => trimText(value).toUpperCase();
+
   const parseIntSafe = (value) => {
     if (value == null || value === '') return null;
     if (typeof value === 'number') return Number.isFinite(value) ? Math.trunc(value) : null;
-    const cleaned = String(value).replace(/[^0-9-]/g, '');
+    const cleaned = String(value).trim().replace(/[,$]/g, '');
     if (!cleaned) return null;
     const parsed = Number.parseInt(cleaned, 10);
     return Number.isFinite(parsed) ? parsed : null;
   };
 
   const parseDate = (value) => {
-    if (!value) return null;
+    if (value == null || value === '') return null;
     if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
-    const parsed = new Date(String(value).trim());
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      const excelEpoch = Date.UTC(1899, 11, 30);
+      const asDate = new Date(excelEpoch + Math.round(value) * 24 * 60 * 60 * 1000);
+      return Number.isNaN(asDate.getTime()) ? null : asDate;
+    }
+    const text = String(value).trim();
+    if (!text) return null;
+    if (/^\d+(\.\d+)?$/.test(text)) {
+      const serial = Number(text);
+      if (Number.isFinite(serial)) {
+        const excelEpoch = Date.UTC(1899, 11, 30);
+        const asDate = new Date(excelEpoch + Math.round(serial) * 24 * 60 * 60 * 1000);
+        if (!Number.isNaN(asDate.getTime())) return asDate;
+      }
+    }
+    const parsed = new Date(text);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
-  const cleanBonusRating = (value) => String(value || '').trim().replace(/\s+/g, '');
+  const cleanBonusRating = (value) => {
+    const raw = trimText(value).replace(/\s+/g, '');
+    if (!raw) return '';
+    if (/(CM|CS)$/i.test(raw)) return raw.slice(0, -2);
+    if (/(A|N|R)$/i.test(raw)) return raw.slice(0, -2);
+    if (/C$/i.test(raw)) return raw.slice(0, -1);
+    if (/\d$/.test(raw)) return raw.slice(0, -1);
+    return raw;
+  };
 
   const fyFromDate = (date) => {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
     return date.getMonth() + 1 >= 10 ? date.getFullYear() + 1 : date.getFullYear();
   };
 
+  const isBlankRow = (row) => Object.values(row || {}).every((value) => trimText(value) === '');
+
+  const assignBonusOrder = (rows) => {
+    const earliestEventByKey = new Map();
+    rows.forEach((row) => {
+      const dodid = trimText(row.DODID);
+      const trackingNum = trimText(row['Bonus Tracking Num']);
+      const dueDate = row['Due Date'];
+      if (!dodid || !trackingNum || !(dueDate instanceof Date) || Number.isNaN(dueDate.getTime())) return;
+      const key = `${dodid}||${trackingNum}`;
+      const existing = earliestEventByKey.get(key);
+      if (!existing || dueDate < existing) earliestEventByKey.set(key, dueDate);
+    });
+
+    const eventsByDodid = new Map();
+    earliestEventByKey.forEach((eventStartDate, key) => {
+      const [dodid, trackingNum] = key.split('||');
+      if (!eventsByDodid.has(dodid)) eventsByDodid.set(dodid, []);
+      eventsByDodid.get(dodid).push({ dodid, trackingNum, eventStartDate });
+    });
+
+    const eventIndex = new Map();
+    eventsByDodid.forEach((events, dodid) => {
+      events
+        .sort((a, b) => (
+          a.eventStartDate.getTime() - b.eventStartDate.getTime()
+          || String(a.trackingNum).localeCompare(String(b.trackingNum))
+        ))
+        .forEach((event, idx) => {
+          eventIndex.set(`${dodid}||${event.trackingNum}`, {
+            BonusOrder: idx + 1,
+            EventStartDate: event.eventStartDate
+          });
+        });
+    });
+
+    return eventIndex;
+  };
+
+  const applyHpoSubtype = (row) => {
+    const submType = trimText(row['Mbr Reserve Bonus Subm Type']).toLowerCase();
+    const ratingDesignator = trimText(row.Bonus_Rating_Designator || row['Bonus Rating_Designator']);
+    const hasKeyword = ['critical wartime', 'retention bonus', 'officer retention'].some((key) => submType.includes(key));
+    const hasCode = ['2105', '2205', '2305', '2905'].some((code) => ratingDesignator.includes(code));
+    if (!hasKeyword || !hasCode) return null;
+    if (row.BonusOrder === 1) return 'AB';
+    if (row.BonusOrder > 1) return 'RB';
+    return null;
+  };
+
+  const countDistinctBonusesByMember = (rows) => {
+    const tracker = new Map();
+    rows.forEach((row) => {
+      const dodid = trimText(row.DODID);
+      const trackingNum = trimText(row['Bonus Tracking Num']);
+      if (!dodid || !trackingNum) return;
+      if (!tracker.has(dodid)) tracker.set(dodid, new Set());
+      tracker.get(dodid).add(trackingNum);
+    });
+    const result = new Map();
+    tracker.forEach((set, dodid) => result.set(dodid, set.size));
+    return result;
+  };
+
   const applyTransforms = (rows) => {
     const crosswalkMap = buildCrosswalkMapFromRows();
-    const transformed = rows
+    const ineligibleDutyStatCodes = new Set([147, 247, 248, 500, 900]);
+    const parsedRows = rows
+      .filter((r) => !isBlankRow(r))
       .map((r) => {
-        const code = String(r['Mbr Reserve Bonus Subm Category Code'] || r.rawTypeCode || '').trim() || null;
+        const code = upperTrimText(r['Mbr Reserve Bonus Subm Category Code'] || r.rawTypeCode) || null;
         const cw = crosswalkMap.get(code) || {};
         const installNum = parseIntSafe(r['Mbr Reserve Bonus Subm Install Num'] ?? r.installmentNumber) || 1;
         const approvalDate = parseDate(r['Mbr Reserve Bonus Subm Install Process Dttm']);
-        const dueDate = parseDate(r['Mbr Reserve Bonus Subm Effective Date'] ?? r.effectiveDate);
-        const designator = parseIntSafe(r['Mbr Reserve Bonus Subm Desig Cd'] ?? r.officerDesignator);
+        const dueDate = parseDate(r['Mbr Reserve Bonus Subm Effective Date'] ?? r.effectiveDate ?? r['Due Date']);
+        const installmentDueDate = parseDate(r['Installment Due Date'] ?? r['Mbr Reserve Bonus Subm Install Due Date']);
+        const affiliationDate = parseDate(r['Affiliation Date'] ?? r['Mbr Reserve Bonus Subm Affiliation Date']);
+        const terminationDate = parseDate(r['Termination Date'] ?? r['Mbr Reserve Bonus Subm Termination Date']);
+        const dutyStatCode = parseIntSafe(r['Duty Stat Code'] ?? r['Mbr Reserve Bonus Duty Stat Cd']);
+        const designator = trimText(r['Mbr Reserve Bonus Subm Desig Cd'] ?? r.officerDesignator ?? r['Current Designator']);
         const rating = cleanBonusRating(r['Mbr Reserve Bonus Subm Rate Rank'] ?? r.rateRank);
-        const ratingDesignator = String(rating || '') + String(designator || '');
-        const oe = !ratingDesignator || !String(ratingDesignator).trim()
+        const ratingDesignator = `${rating}${designator}`.trim();
+        const oe = !ratingDesignator
           ? 'Enlisted'
-          : /^\d/.test(String(ratingDesignator).trim())
+          : /^\d/.test(String(ratingDesignator))
             ? 'Officer'
             : 'Enlisted';
         const payout = installNum > 1 ? 'Anniversary' : 'Initial';
-        const grouped = cw.grouped || String(r['Mbr Reserve Bonus Subm Category'] || r.category || '').trim() || '(blank)';
+        const rawCategory = trimText(r['Mbr Reserve Bonus Subm Category'] || r.category);
+        const grouped = trimText(cw.grouped || rawCategory) || '(blank)';
+        const bonusType = trimText(cw.bonusType);
+        const categoryBase = trimText(cw.category || rawCategory);
+        const installmentAmount = parseExecutionAmount(r['Mbr Reserve Bonus Subm Install Amount'] ?? r.installmentAmount) || 0;
         let payoutFY = null;
         if (approvalDate) {
           payoutFY = fyFromDate(approvalDate);
@@ -336,16 +436,17 @@ function bindExecutionDashboardActions() {
         }
 
         return {
-          Name: r['Member Name'] || '',
-          'Bonus Tracking Num': r['Mbr Reserve Bonus Subm Track Num Actual'] || r.trackNumActual || '',
-          Category: cw.category || r['Mbr Reserve Bonus Subm Category'] || r.category || '',
-          'Bonus Type': cw.bonusType || '',
+          DODID: trimText(r.DODID ?? r.dodid),
+          Name: trimText(r['Member Name'] || r.Name),
+          'Bonus Tracking Num': trimText(r['Mbr Reserve Bonus Subm Track Num Actual'] || r.trackNumActual || r['Bonus Tracking Num']),
+          Category: categoryBase,
+          'Bonus Type': bonusType,
           'Approval Flag': approvalDate ? 'Approved' : 'Committed',
           O_E: oe,
           'Payout FY': payoutFY,
           Payout: payout,
           'Installment Number': installNum,
-          'Installment Amount': parseExecutionAmount(r['Mbr Reserve Bonus Subm Install Amount'] ?? r.installmentAmount) || 0,
+          'Installment Amount': installmentAmount,
           'Budget Line Item Grouped': grouped,
           'Budget Line Item': `${grouped} ${payout}`.trim(),
           'Mbr Reserve Bonus Subm Category Code': code,
@@ -356,44 +457,115 @@ function bindExecutionDashboardActions() {
           ),
           'Approval Date': approvalDate,
           'Due Date': dueDate,
+          'Installment Due Date': installmentDueDate,
+          'Affiliation Date': affiliationDate,
+          'Termination Date': terminationDate,
+          'Termination Reason': trimText(r['Termination Reason'] ?? r['Mbr Reserve Bonus Subm Term Rsn']),
+          'Duty Stat Code': dutyStatCode,
+          UIC: trimText(r.UIC ?? r['Mbr Reserve Bonus UIC']),
+          'Reserve UIC Indicator': trimText(r['Reserve UIC Indicator'] ?? r['Mbr Reserve Bonus Reserve UIC Indicator']),
+          'Mbr Reserve Bonus Subm Type': trimText(r['Mbr Reserve Bonus Subm Type']),
+          'Bonus Rating': rating,
+          'Bonus Designator': designator,
+          'Bonus Rating_Designator': ratingDesignator,
+          Bonus_Rating_Designator: ratingDesignator,
+          'Current Paygrade': trimText(r['Current Paygrade']),
+          'Current Rank/Rate': trimText(r['Current Rank/Rate'] ?? r['Current Rank Rate'] ?? r['Current Rate Rank']),
+          'Current Rating': trimText(r['Current Rating']),
+          'Current Designator': trimText(r['Current Designator'] ?? designator),
           sourceId: r.sourceId || '',
           status: approvalDate ? 'Approved' : 'Committed',
-          category: cw.category || r['Mbr Reserve Bonus Subm Category'] || r.category || '',
+          category: categoryBase,
           budgetLineItem: `${grouped} ${payout}`.trim(),
           budgetLineItemGrouped: grouped,
           oe,
-          bonusType: cw.bonusType || '',
+          bonusType,
           payoutFy: payoutFY,
           payoutType: payout,
-          amount: parseExecutionAmount(r['Mbr Reserve Bonus Subm Install Amount'] ?? r.installmentAmount) || 0
+          amount: installmentAmount
         };
       })
+      .filter((row) => !(row['Termination Date'] && !row['Approval Date']))
+      .filter((row) => !(!row['Approval Date'] && ineligibleDutyStatCodes.has(parseIntSafe(row['Duty Stat Code']))))
       .filter((row) => !['SRB10', 'SRB15'].includes(String(row['Mbr Reserve Bonus Subm Category Code'] || '').trim()))
       .filter((row) => {
-        if (row['Approval Flag'] === 'Committed' || row.status === 'Committed') {
-          return true;
-        }
-
         const status = String(row['Bonus Installment Status Ind'] ?? '').trim();
         return ['P', 'S', ''].includes(status);
       });
 
-    const groupedPayouts = transformed.reduce((acc, row) => {
+    const withInstallmentKeys = parsedRows.map((row) => ({
+      ...row,
+      'Installment ID': trimText(row['Bonus Tracking Num']) ? `${trimText(row['Bonus Tracking Num'])}-${row['Installment Number']}` : '',
+      'Installment Due FY': fyFromDate(row['Installment Due Date']),
+      'Due Date FY': fyFromDate(row['Due Date']),
+      'Affiliation FY': fyFromDate(row['Affiliation Date'])
+    }));
+
+    const bonusOrderByEvent = assignBonusOrder(withInstallmentKeys);
+    const bonusCountsByMember = countDistinctBonusesByMember(withInstallmentKeys);
+    const withDerivedFields = withInstallmentKeys.map((row) => {
+      const eventKey = `${trimText(row.DODID)}||${trimText(row['Bonus Tracking Num'])}`;
+      const event = bonusOrderByEvent.get(eventKey) || {};
+      const bonusOrder = event.BonusOrder ?? null;
+      const eventStartDate = event.EventStartDate ?? null;
+      const bonusSubtype = applyHpoSubtype({ ...row, BonusOrder: bonusOrder });
+      const categoryWithSubtype = bonusSubtype ? `${trimText(row.Category)} ${bonusSubtype}`.trim() : row.Category;
+      const currentPaygrade = trimText(row['Current Paygrade']) === '0' ? '' : row['Current Paygrade'];
+      return {
+        ...row,
+        Category: categoryWithSubtype,
+        category: categoryWithSubtype,
+        BonusOrder: bonusOrder,
+        EventStartDate: eventStartDate,
+        BonusSubtype: bonusSubtype,
+        'Bonuses Received Count': bonusCountsByMember.get(trimText(row.DODID)) ?? 0,
+        'Current Paygrade': currentPaygrade,
+        'Payout FY': parseIntSafe(row['Payout FY']),
+        'Due Date FY': parseIntSafe(row['Due Date FY']),
+        'Installment Due FY': parseIntSafe(row['Installment Due FY']),
+        'Affiliation FY': parseIntSafe(row['Affiliation FY']),
+        payoutFy: parseIntSafe(row['Payout FY']),
+        budgetLineItem: `${row['Budget Line Item Grouped']} ${row.Payout}`.trim()
+      };
+    });
+
+    const groupedPayouts = withDerivedFields.reduce((acc, row) => {
       const key = row['Budget Line Item Grouped'] || '(blank)';
       if (!acc[key]) acc[key] = new Set();
       acc[key].add(row.Payout);
       return acc;
     }, {});
-
-    return transformed.map((row) => {
+    const finalColumnOrder = [
+      'DODID', 'Name', 'Bonus Tracking Num', 'Installment ID', 'Mbr Reserve Bonus Subm Category Code', 'Bonus Type', 'Category', 'BonusSubtype',
+      'Budget Line Item Grouped', 'Budget Line Item', 'Budget Line Item Combined', 'O_E', 'Current Paygrade', 'Current Rank/Rate', 'Current Rating',
+      'Current Designator', 'Due Date', 'Due Date FY', 'Installment Due Date', 'Installment Due FY', 'Approval Date', 'Approval Flag',
+      'Affiliation Date', 'Affiliation FY', 'Installment Number', 'Payout', 'Payout FY', 'Installment Amount', 'Duty Stat Code', 'Termination Date',
+      'Termination Reason', 'BonusOrder', 'EventStartDate', 'Bonuses Received Count', 'Bonus Installment Status Ind', 'UIC', 'Reserve UIC Indicator',
+      'Bonus Rating', 'Bonus Designator', 'Bonus Rating_Designator', 'Mbr Reserve Bonus Subm Type'
+    ];
+    return withDerivedFields.map((row) => {
       const key = row['Budget Line Item Grouped'] || '(blank)';
       const hasBoth = groupedPayouts[key]?.has('Initial') && groupedPayouts[key]?.has('Anniversary');
       const combined = hasBoth ? key : row['Budget Line Item'];
-      return {
+      const enriched = {
         ...row,
         'Budget Line Item Combined': combined,
-        budgetLineItemCombined: combined
+        budgetLineItemCombined: combined,
+        payoutFy: row['Payout FY'],
+        payoutType: row.Payout,
+        status: row['Approval Flag'],
+        oe: row.O_E,
+        bonusType: row['Bonus Type'],
+        amount: row['Installment Amount'],
+        budgetLineItem: row['Budget Line Item'],
+        budgetLineItemGrouped: row['Budget Line Item Grouped'],
+        category: row.Category
       };
+      const ordered = {};
+      finalColumnOrder.forEach((column) => {
+        ordered[column] = enriched[column] ?? null;
+      });
+      return { ...ordered, ...enriched };
     });
   };
 
