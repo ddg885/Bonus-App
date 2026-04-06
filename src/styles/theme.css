@@ -222,6 +222,9 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
 .execution-dashboard .page-header h2 {
   color: var(--sidebar-bg);
 }
+.execution-dashboard .page-header p.header-description {
+  color: var(--sidebar-bg);
+}
 .execution-dashboard .page-header p,
 .execution-dashboard .muted,
 .execution-dashboard .empty {
@@ -254,7 +257,7 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
 .execution-dashboard .execution-kpi-stack .card-grid,
 .execution-dashboard .execution-chart-stack {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: var(--space-4);
 }
 .execution-dashboard .execution-kpi-stack .metric-card {
@@ -266,13 +269,20 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
   border-radius: 20px;
 }
 .execution-dashboard .execution-kpi-stack .metric-title {
-  color: rgba(230, 240, 255, 0.9);
-  font-size: 1.05rem;
+  color: rgba(206, 223, 247, 0.86);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
 }
 .execution-dashboard .execution-kpi-stack .metric-value {
   color: #fff;
   font-size: clamp(1.8rem, 6vw, 2.5rem);
   line-height: 1.1;
+}
+.execution-dashboard .execution-kpi-stack .metric-subtitle {
+  color: rgba(206, 223, 247, 0.78);
+  font-size: 0.8rem;
 }
 .execution-dashboard .chart-panel h2 {
   margin-top: 0;
@@ -296,6 +306,30 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
 .execution-dashboard .bar-row > span,
 .execution-dashboard .bar-row > b {
   color: #fff;
+}
+.execution-dashboard .filter-grid label {
+  gap: 8px;
+}
+.execution-dashboard .filter-selection-summary {
+  display: inline-flex;
+  align-items: center;
+}
+.execution-dashboard .filter-clear-link {
+  margin-left: 10px;
+  font-size: 0.82rem;
+  color: #cfe0ff;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.execution-dashboard .filter-clear-link:hover {
+  color: #fff;
+}
+.execution-dashboard .dashboard-search-label {
+  align-self: flex-start;
+}
+.execution-dashboard #dashboard-clear-all-filters {
+  margin-top: 4px;
+  align-self: flex-start;
 }
 
 [data-crosswalk-cell] {
