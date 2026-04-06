@@ -219,6 +219,9 @@ thead th { position: sticky; top: 0; background: #eef4ff; }
 .execution-dashboard strong {
   color: #fff;
 }
+.execution-dashboard .page-header h2 {
+  color: var(--sidebar-bg);
+}
 .execution-dashboard .page-header p,
 .execution-dashboard .muted,
 .execution-dashboard .empty {
