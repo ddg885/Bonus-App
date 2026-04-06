@@ -29,7 +29,13 @@ function sortByValueDesc(data) {
 }
 
 function options(values, selected = []) {
-  return values.map((v) => `<option value="${v}" ${selected.includes(v) ? 'selected' : ''}>${v}</option>`).join('');
+  const selectedValues = new Set((Array.isArray(selected) ? selected : []).map((value) => String(value ?? '')));
+  return values
+    .map((v) => {
+      const normalized = String(v ?? '');
+      return `<option value="${normalized}" ${selectedValues.has(normalized) ? 'selected' : ''}>${normalized}</option>`;
+    })
+    .join('');
 }
 
 function selectionSummary(values, selected = []) {

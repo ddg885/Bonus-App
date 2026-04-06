@@ -526,11 +526,18 @@ function bindExecutionDashboardActions() {
 
 function bindDashboardFilters() {
   document.querySelectorAll('[data-dashboard-filter]').forEach((el) => {
-    el.addEventListener('change', () => {
+    const syncFilter = () => {
       const key = el.dataset.dashboardFilter;
-      const filters = { ...(store.state.ui.dashboard?.filters || {}), [key]: toMultiValues(el) };
+      if (!key) return;
+      const selectedValues = Array.from(el.selectedOptions).map((o) => o.value);
+      const prevFilters = store.state.ui.dashboard?.filters || {};
+      const prevValues = Array.isArray(prevFilters[key]) ? prevFilters[key] : [];
+      if (prevValues.length === selectedValues.length && prevValues.every((value, idx) => value === selectedValues[idx])) return;
+      const filters = { ...prevFilters, [key]: selectedValues };
       store.patchUi({ dashboard: { filters } });
-    });
+    };
+    el.addEventListener('input', syncFilter);
+    el.addEventListener('change', syncFilter);
   });
   document.querySelectorAll('[data-clear-dashboard-filter]').forEach((el) => {
     el.addEventListener('click', (event) => {
