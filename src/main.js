@@ -526,7 +526,9 @@ function bindExecutionDashboardActions() {
 
 function bindDashboardFilters() {
   document.querySelectorAll('[data-dashboard-filter]').forEach((el) => {
+    let pendingSyncTimer = null;
     const syncFilter = () => {
+      pendingSyncTimer = null;
       const key = el.dataset.dashboardFilter;
       if (!key) return;
       const selectedValues = Array.from(el.selectedOptions).map((o) => o.value);
@@ -536,8 +538,12 @@ function bindDashboardFilters() {
       const filters = { ...prevFilters, [key]: selectedValues };
       store.patchUi({ dashboard: { filters } });
     };
-    el.addEventListener('input', syncFilter);
-    el.addEventListener('change', syncFilter);
+    const scheduleSyncFilter = () => {
+      if (pendingSyncTimer) clearTimeout(pendingSyncTimer);
+      pendingSyncTimer = setTimeout(syncFilter, 0);
+    };
+    el.addEventListener('input', scheduleSyncFilter);
+    el.addEventListener('change', scheduleSyncFilter);
   });
   document.querySelectorAll('[data-clear-dashboard-filter]').forEach((el) => {
     el.addEventListener('click', (event) => {
