@@ -653,9 +653,17 @@ function bindExecutionDashboardActions() {
       return;
     }
     const resultRows = applyTransforms(rawRows);
+    const payoutFyValues = [...new Set(
+      resultRows
+        .map((row) => Number(row.payoutFy))
+        .filter((value) => Number.isFinite(value))
+    )].sort((a, b) => a - b);
+    const payoutFyMin = payoutFyValues.length ? payoutFyValues[0] : null;
+    const payoutFyMax = payoutFyValues.length ? payoutFyValues[payoutFyValues.length - 1] : null;
     patchRuntimeDashboardState({
-      ...runtimeState,
-      transformedRows: resultRows
+      rawRows: [...rawRows],
+      transformedRows: resultRows,
+      pendingFileName: runtimeState.pendingFileName || ''
     });
     store.patchUi({
       executionDashboard: {
@@ -663,10 +671,14 @@ function bindExecutionDashboardActions() {
         fileName: runtimeState.pendingFileName || '',
         rawRowCount: rawRows.length,
         transformedRowCount: resultRows.length,
-        issues: [`Rows transformed successfully: ${resultRows.length}`],
+        issues: [
+          `Rows transformed successfully: ${resultRows.length}`,
+          `Payout FY debug summary (temporary): min=${payoutFyMin ?? 'n/a'}, max=${payoutFyMax ?? 'n/a'}, values=${payoutFyValues.join(', ') || 'none'}`
+        ],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
-      }
+      },
+      dashboard: { filters: {} }
     });
 
     const uploadInput = document.getElementById('execution-dashboard-upload');
