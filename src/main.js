@@ -408,11 +408,6 @@ function bindExecutionDashboardActions() {
         const installNum = parseIntSafe(r['Mbr Reserve Bonus Subm Install Num'] ?? r.installmentNumber) || 1;
         const approvalDate = parseDate(r['Mbr Reserve Bonus Subm Install Process Dttm']);
         const dueDate = parseDate(r['Mbr Reserve Bonus Subm Effective Date'] ?? r.effectiveDate ?? r['Due Date']);
-        const installmentEffectiveDate = parseDate(
-          r['Mbr Reserve Bonus Subm Install Effdt']
-          ?? r.installmentDate
-          ?? r['Installment Effective Date']
-        );
         const installmentDueDate = parseDate(r['Installment Due Date'] ?? r['Mbr Reserve Bonus Subm Install Due Date']);
         const affiliationDate = parseDate(r['Affiliation Date'] ?? r['Mbr Reserve Bonus Subm Affiliation Date']);
         const terminationDate = parseDate(r['Termination Date'] ?? r['Mbr Reserve Bonus Subm Termination Date']);
@@ -440,8 +435,10 @@ function bindExecutionDashboardActions() {
         let payoutFY = null;
         if (approvalDate) {
           payoutFY = fyFromDate(approvalDate);
-        } else if (installmentEffectiveDate) {
-          payoutFY = fyFromDate(installmentEffectiveDate);
+        } else if (dueDate) {
+          payoutFY = dueDate.getMonth() + 1 >= 10
+            ? dueDate.getFullYear() + installNum
+            : dueDate.getFullYear() + (installNum - 1);
         }
 
         return {
@@ -462,7 +459,6 @@ function bindExecutionDashboardActions() {
           'Bonus Installment Status Ind': rawInstallmentStatus,
           'Approval Date': approvalDate,
           'Due Date': dueDate,
-          'Installment Effective Date': installmentEffectiveDate,
           'Installment Due Date': installmentDueDate,
           'Affiliation Date': affiliationDate,
           'Termination Date': terminationDate,
