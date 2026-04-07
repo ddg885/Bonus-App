@@ -489,11 +489,7 @@ function bindExecutionDashboardActions() {
       })
       .filter((row) => !(row['Termination Date'] && !row['Approval Date']))
       .filter((row) => !(!row['Approval Date'] && ineligibleDutyStatCodes.has(parseIntSafe(row['Duty Stat Code']))))
-      .filter((row) => !['SRB10', 'SRB15'].includes(String(row['Mbr Reserve Bonus Subm Category Code'] || '').trim()))
-      .filter((row) => {
-        const status = String(row['Bonus Installment Status Ind'] ?? '').trim();
-        return row['Approval Date'] ? ['P', 'S', ''].includes(status) : true;
-      });
+      .filter((row) => !['SRB10', 'SRB15'].includes(String(row['Mbr Reserve Bonus Subm Category Code'] || '').trim()));
 
     const withInstallmentKeys = parsedRows.map((row) => ({
       ...row,
