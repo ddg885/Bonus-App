@@ -653,13 +653,6 @@ function bindExecutionDashboardActions() {
       return;
     }
     const resultRows = applyTransforms(rawRows);
-    const payoutFyValues = [...new Set(
-      resultRows
-        .map((row) => Number(row.payoutFy))
-        .filter((value) => Number.isFinite(value))
-    )].sort((a, b) => a - b);
-    const payoutFyMin = payoutFyValues.length ? payoutFyValues[0] : null;
-    const payoutFyMax = payoutFyValues.length ? payoutFyValues[payoutFyValues.length - 1] : null;
     patchRuntimeDashboardState({
       rawRows: [...rawRows],
       transformedRows: resultRows,
@@ -671,10 +664,7 @@ function bindExecutionDashboardActions() {
         fileName: runtimeState.pendingFileName || '',
         rawRowCount: rawRows.length,
         transformedRowCount: resultRows.length,
-        issues: [
-          `Rows transformed successfully: ${resultRows.length}`,
-          `Payout FY debug summary (temporary): min=${payoutFyMin ?? 'n/a'}, max=${payoutFyMax ?? 'n/a'}, values=${payoutFyValues.join(', ') || 'none'}`
-        ],
+        issues: [`Rows transformed successfully: ${resultRows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
       },
