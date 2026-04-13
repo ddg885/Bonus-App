@@ -162,6 +162,31 @@ button:disabled {
 .badge.warning { background: var(--warning-soft); color: var(--warning); }
 .badge.negative { background: var(--negative-soft); color: var(--negative); }
 
+
+.waterfall-source-panel h3 { margin-top: 0; }
+.segmented-control {
+  display: inline-flex;
+  background: #eef3ff;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px;
+  gap: 4px;
+}
+.segment-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+}
+.segment-btn.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 6px 12px rgba(34, 85, 170, 0.2);
+}
+.waterfall-empty-note { margin: 0; }
+
 .filter-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .filter-grid select[multiple] { min-height: 110px; }
 .dataset-status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }

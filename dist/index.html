@@ -8,6 +8,31 @@
   </head>
   <body>
     <div id="app"></div>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script type="module" src="./src/main.js"></script>
+    <script>
+      (() => {
+        const LIST_FILTER_IDS = [
+          'approvalFilter',
+          'categoryFilter',
+          'budgetFilter',
+          'oeFilter',
+          'fyFilter',
+          'payoutFilter'
+        ];
+
+        const isExecutionListFilter = (el) => {
+          if (!el) return false;
+          if (LIST_FILTER_IDS.includes(el.id)) return true;
+          return el.matches?.('select[multiple][data-dashboard-filter]');
+        };
+
+        document.addEventListener('input', (event) => {
+          const target = event.target;
+          if (!isExecutionListFilter(target)) return;
+          target.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+      })();
+    </script>
   </body>
 </html>
