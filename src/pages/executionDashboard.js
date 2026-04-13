@@ -148,6 +148,11 @@ export function executionDashboardPage(state) {
   // Keep all committed KPI/drilldown logic on a single source to avoid hidden subset drift.
   const committedDetailRows = committedRows(filtered);
   const committedAmount = sumAmount(committedDetailRows);
+  const committedVerification = {
+    rows: committedDetailRows.length,
+    amount: committedAmount,
+    payoutFyValues: uniq(committedDetailRows, 'payoutFy')
+  };
   const distinctBonusCount = distinctBonuses(filtered);
 
   return `
@@ -193,6 +198,15 @@ export function executionDashboardPage(state) {
             { label: 'DISTINCT BONUSES', value: distinctBonusCount, subtitle: 'Distinct tracking nums' }
           ])}
         </div>
+        <section class="panel">
+          <h3>Committed KPI Verification (Temporary)</h3>
+          <p class="muted">Verification uses the exact rows behind COMMITTED AMOUNT after all active filters/search are applied.</p>
+          <div class="dataset-status">
+            <div><strong>Committed Detail Rows</strong> <span>${committedVerification.rows}</span></div>
+            <div><strong>Committed Amount Source Sum</strong> <span>${Number(committedVerification.amount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
+            <div><strong>Committed Payout FY Values</strong> <span>${committedVerification.payoutFyValues.join(', ') || '(none)'}</span></div>
+          </div>
+        </section>
         <div class="execution-chart-row">
           ${barList('Amount by Payout FY', payoutFyData)}
           ${barList('Amount by Category', categoryData)}
