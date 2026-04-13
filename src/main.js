@@ -231,6 +231,9 @@ function bindExecutionDashboardActions() {
   const patchRuntimeDashboardState = (next) => {
     store.set({ executionDashboardRuntime: next });
   };
+  const resetDashboardFilters = () => {
+    store.patchUi({ dashboard: { filters: {} } });
+  };
 
   const setExecutionDashboardState = (next) => {
     store.patchUi({
@@ -667,9 +670,9 @@ function bindExecutionDashboardActions() {
         issues: [`Rows transformed successfully: ${resultRows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
-      },
-      dashboard: { filters: {} }
+      }
     });
+    resetDashboardFilters();
 
     const uploadInput = document.getElementById('execution-dashboard-upload');
     if (uploadInput) uploadInput.value = '';
@@ -691,16 +694,14 @@ function bindExecutionDashboardActions() {
   const clearFiltersBtn = document.getElementById('dashboard-clear-filters');
   if (clearFiltersBtn) {
     clearFiltersBtn.addEventListener('click', () => {
-      store.patchUi({ dashboard: { filters: {} } });
+      resetDashboardFilters();
     });
   }
 }
 
 function bindDashboardFilters() {
   document.querySelectorAll('[data-dashboard-filter]').forEach((el) => {
-    let pendingSyncTimer = null;
     const syncFilter = () => {
-      pendingSyncTimer = null;
       const key = el.dataset.dashboardFilter;
       if (!key) return;
       const selectedValues = Array.from(el.selectedOptions).map((o) => o.value);
@@ -710,12 +711,8 @@ function bindDashboardFilters() {
       const filters = { ...prevFilters, [key]: selectedValues };
       store.patchUi({ dashboard: { filters } });
     };
-    const scheduleSyncFilter = () => {
-      if (pendingSyncTimer) clearTimeout(pendingSyncTimer);
-      pendingSyncTimer = setTimeout(syncFilter, 0);
-    };
-    el.addEventListener('input', scheduleSyncFilter);
-    el.addEventListener('change', scheduleSyncFilter);
+    el.addEventListener('input', syncFilter);
+    el.addEventListener('change', syncFilter);
   });
   document.querySelectorAll('[data-clear-dashboard-filter]').forEach((el) => {
     el.addEventListener('click', (event) => {
