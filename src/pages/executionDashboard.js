@@ -14,14 +14,6 @@ function groupedAmount(rows, key) {
   }, {})).map(([label, value]) => ({ label, value: Number(value.toFixed(2)) }));
 }
 
-function groupedCount(rows, key) {
-  return Object.entries(rows.reduce((acc, r) => {
-    const k = r[key] || 'UNKNOWN';
-    acc[k] = (acc[k] || 0) + 1;
-    return acc;
-  }, {})).map(([label, value]) => ({ label, value }));
-}
-
 function normalizeExecutiveCategory(label) {
   const trimmed = String(label || '').trim();
   if (/^HPO(\s|[-_/]|$)/i.test(trimmed)) return 'HPO';
@@ -79,15 +71,6 @@ function getBonusTrackingNumber(row) {
 
 function sumAmount(rows) {
   return rows.reduce((acc, row) => acc + Number(row.amount || 0), 0);
-}
-
-function formatCurrency(value) {
-  return Number(value || 0).toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
 }
 
 function approvedRows(rows) {
@@ -162,13 +145,9 @@ export function executionDashboardPage(state) {
   const visibleRows = filtered.length;
   const installmentAmount = sumAmount(filtered);
   const approvedAmount = sumAmount(approvedRows(filtered));
+  // Keep all committed KPI/drilldown logic on a single source to avoid hidden subset drift.
   const committedDetailRows = committedRows(filtered);
   const committedAmount = sumAmount(committedDetailRows);
-  const committedRowCount = committedDetailRows.length;
-  const committedTopCategoryCodes = sortByValueDesc(groupedAmount(committedDetailRows, 'Mbr Reserve Bonus Subm Category Code')).slice(0, 10);
-  const committedTopBli = sortByValueDesc(groupedAmount(committedDetailRows, 'budgetLineItemCombined')).slice(0, 10);
-  const committedInstallmentDistribution = sortByValueDesc(groupedCount(committedDetailRows, 'Installment Number'));
-  const committedPayoutDistribution = sortByValueDesc(groupedCount(committedDetailRows, 'payoutType'));
   const distinctBonusCount = distinctBonuses(filtered);
 
   return `
@@ -218,22 +197,6 @@ export function executionDashboardPage(state) {
           ${barList('Amount by Payout FY', payoutFyData)}
           ${barList('Amount by Category', categoryData)}
         </div>
-        <section class="panel">
-          <h3>Temporary Committed KPI Diagnostics</h3>
-          <p class="muted">Diagnostic view of the exact committed row set currently feeding the COMMITTED AMOUNT card (status or Approval Flag = Committed after filters).</p>
-          <div class="dataset-status">
-            <div><strong>Committed KPI Rows</strong> <span>${committedRowCount}</span></div>
-            <div><strong>Committed KPI Amount</strong> <span>${formatCurrency(committedAmount)}</span></div>
-          </div>
-          <div class="execution-chart-row">
-            ${barList('Committed Amount by Category Code (Top 10)', committedTopCategoryCodes)}
-            ${barList('Committed Amount by Budget Line Item (Top 10)', committedTopBli)}
-          </div>
-          <div class="execution-chart-row">
-            ${barList('Committed Installment Number Distribution (Row Count)', committedInstallmentDistribution)}
-            ${barList('Committed Payout Type Distribution (Row Count)', committedPayoutDistribution)}
-          </div>
-        </section>
         <div class="execution-table-row">
           ${barList('Top Budget Line Items', topBli)}
           ${interactiveTable({
