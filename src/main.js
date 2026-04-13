@@ -746,7 +746,25 @@ function bindWaterfallFilters() {
     el.addEventListener('change', () => {
       const key = el.dataset.waterfallFilter;
       const filters = { ...(store.state.ui.waterfall?.filters || {}), [key]: toMultiValues(el) };
-      store.patchUi({ waterfall: { filters } });
+      store.patchUi({
+        waterfall: {
+          ...(store.state.ui.waterfall || {}),
+          filters
+        }
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-waterfall-source-mode]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const sourceMode = el.dataset.waterfallSourceMode || 'projection';
+      if (store.state.ui.waterfall?.sourceMode === sourceMode) return;
+      store.patchUi({
+        waterfall: {
+          ...(store.state.ui.waterfall || {}),
+          sourceMode
+        }
+      });
     });
   });
 }

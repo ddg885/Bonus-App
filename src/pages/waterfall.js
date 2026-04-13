@@ -17,8 +17,31 @@ function apply(rows, f = {}) {
     && inSet('payoutType', r.payoutType));
 }
 
+function buildExecutionWaterfallRows(executionRows = []) {
+  return executionRows
+    .filter((row) => row && (row.payoutFy || row['Payout FY']))
+    .map((row) => ({
+      category: row.category || row.Category || '',
+      budgetLineItem: row.budgetLineItemCombined || row['Budget Line Item Combined'] || row.budgetLineItem || row['Budget Line Item'] || '',
+      oe: row.oe || row.O_E || '',
+      payoutFy: row.payoutFy || row['Payout FY'] || '',
+      payoutType: row.payoutType || row.Payout || '',
+      dueDateFy: row['Due Date FY'] || row.dueDateFy || row['Installment Due FY'] || '',
+      amount: Number(row.amount || row['Installment Amount'] || 0),
+      takers: 1
+    }));
+}
+
 export function payoutWaterfallPage(state) {
-  const base = state.projectionPayoutSchedule;
+  const sourceMode = state.ui.waterfall?.sourceMode || 'projection';
+  const projectionRows = state.projectionPayoutSchedule || [];
+  const executionRows = buildExecutionWaterfallRows(state.executionDashboardRuntime?.transformedRows || []);
+  const hasExecutionRows = executionRows.length > 0;
+  const base = sourceMode === 'execution'
+    ? executionRows
+    : sourceMode === 'combined'
+      ? [...projectionRows, ...executionRows]
+      : projectionRows;
   const f = state.ui.waterfall?.filters || {};
   const filtered = apply(base, f);
   const payoutFys = uniq(filtered, 'payoutFy');
@@ -47,9 +70,20 @@ export function payoutWaterfallPage(state) {
       { key: `${fy}_amount`, label: `${fy} Amount` }
     ]))
   ];
+  const executionEmptyMessage = sourceMode === 'execution' && !hasExecutionRows
+    ? '<p class="subtle waterfall-empty-note">No transformed execution data is available. Upload and transform data on the Execution Dashboard page to view execution waterfall results.</p>'
+    : '';
 
   return `
     <div class="page-header"><div><h2>Payout Waterfall</h2><p>Matrix payout view by Due Date FY and Payout Type, pivoted across Payout FY with export-ready tabular detail.</p></div></div>
+    <section class="panel waterfall-source-panel">
+      <h3>Data Source</h3>
+      <div class="segmented-control" role="group" aria-label="Waterfall data source">
+        <button type="button" data-waterfall-source-mode="projection" class="segment-btn ${sourceMode === 'projection' ? 'active' : ''}">Projection</button>
+        <button type="button" data-waterfall-source-mode="execution" class="segment-btn ${sourceMode === 'execution' ? 'active' : ''}">Execution</button>
+        <button type="button" data-waterfall-source-mode="combined" class="segment-btn ${sourceMode === 'combined' ? 'active' : ''}">Combined</button>
+      </div>
+    </section>
     <section class="panel"><h3>Filters</h3><div class="filter-grid">
       <label>Category<select multiple data-waterfall-filter="category">${options(uniq(base, 'category'), f.category)}</select></label>
       <label>Budget Line Item<select multiple data-waterfall-filter="budgetLineItem">${options(uniq(base, 'budgetLineItem'), f.budgetLineItem)}</select></label>
@@ -57,6 +91,7 @@ export function payoutWaterfallPage(state) {
       <label>Payout FY<select multiple data-waterfall-filter="payoutFy">${options(uniq(base, 'payoutFy'), f.payoutFy)}</select></label>
       <label>Payout Type<select multiple data-waterfall-filter="payoutType">${options(uniq(base, 'payoutType'), f.payoutType)}</select></label>
     </div></section>
+    ${executionEmptyMessage}
     ${interactiveTable({
       title: 'Waterfall Matrix Table',
       tableId: 'waterfall-matrix',

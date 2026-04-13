@@ -35,7 +35,7 @@ const initialState = {
   variances: [],
   runMeta: { transformedAt: null, projectedAt: null },
   settings: { fyStartMonth: 10 },
-  ui: { tables: {}, dashboard: { filters: {} }, waterfall: { filters: {} }, pomInputs: {} },
+  ui: { tables: {}, dashboard: { filters: {} }, waterfall: { filters: {}, sourceMode: 'projection' }, pomInputs: {} },
   inputStatus: {
     execution: true,
     bonusInfo: true,
@@ -103,7 +103,7 @@ function pickPersistedUi(ui = {}) {
   return {
     tables,
     dashboard: { filters: ui.dashboard?.filters || {} },
-    waterfall: { filters: ui.waterfall?.filters || {} },
+    waterfall: { filters: ui.waterfall?.filters || {}, sourceMode: ui.waterfall?.sourceMode || 'projection' },
     pomInputs: ui.pomInputs || {},
     intakeSource: ui.intakeSource || '',
     executionDashboard: {

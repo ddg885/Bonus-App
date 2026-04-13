@@ -14,71 +14,239 @@ function groupedAmount(rows, key) {
   }, {})).map(([label, value]) => ({ label, value: Number(value.toFixed(2)) }));
 }
 
+function groupedCount(rows, key) {
+  return Object.entries(rows.reduce((acc, r) => {
+    const k = r[key] || 'UNKNOWN';
+    acc[k] = (acc[k] || 0) + 1;
+    return acc;
+  }, {})).map(([label, value]) => ({ label, value }));
+}
+
+function normalizeExecutiveCategory(label) {
+  const trimmed = String(label || '').trim();
+  if (/^HPO(\s|[-_/]|$)/i.test(trimmed)) return 'HPO';
+  return trimmed || 'UNKNOWN';
+}
+
+function sortPayoutFy(data) {
+  return [...data].sort((a, b) => Number(a.label) - Number(b.label));
+}
+
+function sortByValueDesc(data) {
+  return [...data].sort((a, b) => b.value - a.value);
+}
+
 function options(values, selected = []) {
-  return values.map((v) => `<option value="${v}" ${selected.includes(v) ? 'selected' : ''}>${v}</option>`).join('');
+  const selectedValues = new Set((Array.isArray(selected) ? selected : []).map((value) => String(value ?? '')));
+  return values
+    .map((v) => {
+      const normalized = String(v ?? '');
+      return `<option value="${normalized}" ${selectedValues.has(normalized) ? 'selected' : ''}>${normalized}</option>`;
+    })
+    .join('');
+}
+
+function selectionSummary(values, selected = []) {
+  const selectedValues = Array.isArray(selected) ? selected : [];
+  const summary = (() => {
+    if (!values.length) return 'No values available.';
+    if (!selectedValues.length) return `All (${values.length}) selected`;
+    if (selectedValues.length <= 2) return `Selected: ${selectedValues.join(', ')}`;
+    return `${selectedValues.length} selected`;
+  })();
+  return `<div class="filter-selection-summary"><span class="muted">${summary}</span></div>`;
+}
+
+function filterSummaryWithClear(values, selected = [], key) {
+  const summary = selectionSummary(values, selected);
+  return `${summary}<a href="#" class="filter-clear-link" data-clear-dashboard-filter="${key}">Clear Filter</a>`;
+}
+
+function getApprovalStatus(row) {
+  return String(row.status || row['Approval Flag'] || '').trim().toLowerCase();
+}
+
+function getBonusTrackingNumber(row) {
+  return String(
+    row['Bonus Tracking Num']
+    || row.bonusTrackingNum
+    || row.bonusTrackingNumber
+    || row.trackNumActual
+    || row['Mbr Reserve Bonus Subm Track Num Actual']
+    || ''
+  ).trim();
+}
+
+function sumAmount(rows) {
+  return rows.reduce((acc, row) => acc + Number(row.amount || 0), 0);
+}
+
+function formatCurrency(value) {
+  return Number(value || 0).toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function approvedRows(rows) {
+  return rows.filter((row) => getApprovalStatus(row) === 'approved');
+}
+
+function committedRows(rows) {
+  return rows.filter((row) => getApprovalStatus(row) === 'committed');
+}
+
+function distinctBonuses(rows) {
+  return new Set(rows.map(getBonusTrackingNumber).filter(Boolean)).size;
 }
 
 function applyFilters(rows, f = {}) {
   return rows.filter((r) => {
     const text = (f.search || '').toLowerCase();
     const matchesSearch = !text || JSON.stringify(r).toLowerCase().includes(text);
-    const inSet = (k, val) => !(f[k]?.length) || f[k].includes(val || '');
+    const inSet = (k, val) => {
+      const selected = Array.isArray(f[k]) ? f[k].map((item) => String(item ?? '')) : [];
+      const current = String(val ?? '');
+      return !selected.length || selected.includes(current);
+    };
     return matchesSearch
       && inSet('status', r.status)
       && inSet('category', r.category)
-      && inSet('budgetLineItem', r.budgetLineItem)
+      && inSet('budgetLineItemCombined', r.budgetLineItemCombined || r.budgetLineItem)
       && inSet('oe', r.oe)
-      && inSet('bonusType', r.bonusType)
       && inSet('payoutFy', r.payoutFy)
       && inSet('payoutType', r.payoutType);
   });
 }
 
+function renderFilter(label, key, allRows, filters) {
+  const allValues = uniq(allRows, key);
+  return `<label>${label}<select multiple data-dashboard-filter="${key}">${options(allValues, filters[key])}</select>${filterSummaryWithClear(allValues, filters[key], key)}</label>`;
+}
+
+function emptyState(rawCount) {
+  const guidance = rawCount
+    ? 'Raw rows are loaded. Click Transform Data to run the execution pipeline and populate dashboard results.'
+    : 'Upload Bonus Execution data, then click Transform Data to populate this dashboard.';
+  return `<section class="panel"><h3>Execution Summary</h3><p class="empty">${guidance}</p></section>`;
+}
+
+function detailColumns(rows) {
+  const first = rows[0] || {};
+  return Object.keys(first).map((key) => (
+    key === 'budgetLineItemCombined'
+      ? { key, label: 'Budget Line Item' }
+      : { key, label: key }
+  ));
+}
+
 export function executionDashboardPage(state) {
+  const dashboardState = state.ui?.executionDashboard || {};
+  const runtimeState = state.executionDashboardRuntime || {};
+  const rawRows = runtimeState.rawRows || [];
+  const transformedRows = runtimeState.transformedRows || [];
+  const hasTransformed = Boolean(dashboardState.hasTransformed && transformedRows.length);
+  const rawRowCount = hasTransformed ? Number(dashboardState.rawRowCount || rawRows.length || 0) : 0;
+  const transformedRowCount = hasTransformed ? Number(dashboardState.transformedRowCount || transformedRows.length || 0) : 0;
+  const fileName = hasTransformed ? (dashboardState.fileName || '') : '';
+  const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
-  const filtered = applyFilters(state.transformed, f);
-  const topBli = groupedAmount(filtered, 'budgetLineItem').sort((a, b) => b.value - a.value).slice(0, 10);
+  const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
+  const topBli = groupedAmount(filtered, 'budgetLineItemCombined').sort((a, b) => b.value - a.value).slice(0, 10);
+  const payoutFyData = sortPayoutFy(groupedAmount(filtered, 'payoutFy'));
+  const categoryData = sortByValueDesc(
+    groupedAmount(filtered.map((row) => ({ ...row, category: normalizeExecutiveCategory(row.category) })), 'category')
+  );
+  const visibleRows = filtered.length;
+  const installmentAmount = sumAmount(filtered);
+  const approvedAmount = sumAmount(approvedRows(filtered));
+  const committedDetailRows = committedRows(filtered);
+  const committedAmount = sumAmount(committedDetailRows);
+  const committedRowCount = committedDetailRows.length;
+  const committedTopCategoryCodes = sortByValueDesc(groupedAmount(committedDetailRows, 'Mbr Reserve Bonus Subm Category Code')).slice(0, 10);
+  const committedTopBli = sortByValueDesc(groupedAmount(committedDetailRows, 'budgetLineItemCombined')).slice(0, 10);
+  const committedInstallmentDistribution = sortByValueDesc(groupedCount(committedDetailRows, 'Installment Number'));
+  const committedPayoutDistribution = sortByValueDesc(groupedCount(committedDetailRows, 'payoutType'));
+  const distinctBonusCount = distinctBonuses(filtered);
 
   return `
-    <div class="page-header"><div><h2>Execution Dashboard</h2><p>Review transformed execution outcomes with interactive filtering and exports.</p></div></div>
-    <section class="panel">
-      <h3>Filters</h3>
-      <div class="filter-grid">
-        <label>Approval Flag / Status<select multiple data-dashboard-filter="status">${options(uniq(state.transformed, 'status'), f.status)}</select></label>
-        <label>Category<select multiple data-dashboard-filter="category">${options(uniq(state.transformed, 'category'), f.category)}</select></label>
-        <label>Budget Line Item<select multiple data-dashboard-filter="budgetLineItem">${options(uniq(state.transformed, 'budgetLineItem'), f.budgetLineItem)}</select></label>
-        <label>O/E<select multiple data-dashboard-filter="oe">${options(uniq(state.transformed, 'oe'), f.oe)}</select></label>
-        <label>Payout FY<select multiple data-dashboard-filter="payoutFy">${options(uniq(state.transformed, 'payoutFy'), f.payoutFy)}</select></label>
-        <label>Payout Type<select multiple data-dashboard-filter="payoutType">${options(uniq(state.transformed, 'payoutType'), f.payoutType)}</select></label>
-        <label>Search<input data-dashboard-search type="search" value="${f.search || ''}" placeholder="Search all fields"/></label>
-      </div>
-    </section>
-    ${metricCards([
-      { label: 'Filtered Records', value: filtered.length },
-      { label: 'Filtered Amount', value: filtered.reduce((a, r) => a + Number(r.amount || 0), 0), currency: true },
-      { label: 'Distinct Source Rows', value: new Set(filtered.map((r) => r.sourceId)).size }
-    ])}
-    <div class="grid-two">${barList('Amount by Payout FY', groupedAmount(filtered, 'payoutFy'))}${barList('Amount by Category', groupedAmount(filtered, 'category'))}</div>
-    ${barList('Top Budget Line Items', topBli)}
-    ${interactiveTable({
-      title: 'Detailed Records',
-      tableId: 'execution-detailed',
-      rows: filtered,
-      sticky: true,
-      exportName: 'execution-filtered.csv',
-      ui: state.ui.tables?.['execution-detailed'],
-      columns: [
-        { key: 'sourceId', label: 'Source ID' },
-        { key: 'status', label: 'Status' },
-        { key: 'category', label: 'Category' },
-        { key: 'budgetLineItem', label: 'Budget Line Item' },
-        { key: 'oe', label: 'O/E' },
-        { key: 'bonusType', label: 'Bonus Type' },
-        { key: 'payoutType', label: 'Payout Type' },
-        { key: 'payoutFy', label: 'Payout FY' },
-        { key: 'obligationFy', label: 'Obligation FY' },
-        { key: 'amount', label: 'Amount' }
-      ]
-    })}
+    <div class="execution-dashboard">
+      <div class="page-header execution-dashboard-header"><div><h2>Execution Dashboard</h2><p class="header-description">Review transformed execution outcomes with interactive filtering and exports.</p></div></div>
+      <section class="panel">
+        <h3>Bonus Execution Data</h3>
+        <div class="intake-toolbar-left">
+          <label>Upload Bonus Execution File
+            <input id="execution-dashboard-upload" type="file" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+          </label>
+          <button id="execution-transform-btn" class="primary-btn" ${rawRows.length ? '' : 'disabled'}>Transform Data</button>
+          <button id="dashboard-clear-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear Filters</button>
+        </div>
+        <div class="dataset-status">
+          <div><strong>Selected File</strong> <span>${fileName}</span></div>
+          <div><strong>Raw Rows Loaded</strong> <span>${rawRowCount}</span></div>
+          <div><strong>Transformed Rows</strong> <span>${transformedRowCount}</span></div>
+        </div>
+        ${issues.length ? `<p class="danger">${issues.map((issue) => (typeof issue === 'string' ? issue : issue?.message || JSON.stringify(issue))).join(' | ')}</p>` : ''}
+        <p class="muted">This page only supports Bonus Execution data. Upload only stores raw rows; dashboard metrics/charts render after you click Transform Data.</p>
+      </section>
+      <section class="panel">
+        <h3>Filters</h3>
+        <p class="muted">Filters apply after transformation. Each filter supports multiple selections (use Control + click to select multiple options); leaving a filter unchanged includes all values. Search checks all fields in the displayed rows.</p>
+        <div class="filter-grid">
+          ${renderFilter('Approval Flag', 'status', transformedRows, f)}
+          ${renderFilter('Category', 'category', transformedRows, f)}
+          ${renderFilter('Budget Line Item', 'budgetLineItemCombined', transformedRows, f)}
+          ${renderFilter('O/E', 'oe', transformedRows, f)}
+          ${renderFilter('Payout FY', 'payoutFy', transformedRows, f)}
+          ${renderFilter('Payout', 'payoutType', transformedRows, f)}
+          <label class="dashboard-search-label">Search<input data-dashboard-search type="search" value="${f.search || ''}" placeholder="Search all fields" ${hasTransformed ? '' : 'disabled'} /><button type="button" id="dashboard-clear-all-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear All Filters</button></label>
+        </div>
+      </section>
+      ${hasTransformed ? `
+        <div class="execution-kpi-stack">
+          ${metricCards([
+            { label: 'VISIBLE ROWS', value: visibleRows, subtitle: 'After filters' },
+            { label: 'INSTALLMENT AMOUNT', value: installmentAmount, currency: true, subtitle: 'Visible rows' },
+            { label: 'APPROVED AMOUNT', value: approvedAmount, currency: true, subtitle: 'Approval Date present' },
+            { label: 'COMMITTED AMOUNT', value: committedAmount, currency: true, subtitle: 'Approval Date blank' },
+            { label: 'DISTINCT BONUSES', value: distinctBonusCount, subtitle: 'Distinct tracking nums' }
+          ])}
+        </div>
+        <div class="execution-chart-row">
+          ${barList('Amount by Payout FY', payoutFyData)}
+          ${barList('Amount by Category', categoryData)}
+        </div>
+        <section class="panel">
+          <h3>Temporary Committed KPI Diagnostics</h3>
+          <p class="muted">Diagnostic view of the exact committed row set currently feeding the COMMITTED AMOUNT card (status or Approval Flag = Committed after filters).</p>
+          <div class="dataset-status">
+            <div><strong>Committed KPI Rows</strong> <span>${committedRowCount}</span></div>
+            <div><strong>Committed KPI Amount</strong> <span>${formatCurrency(committedAmount)}</span></div>
+          </div>
+          <div class="execution-chart-row">
+            ${barList('Committed Amount by Category Code (Top 10)', committedTopCategoryCodes)}
+            ${barList('Committed Amount by Budget Line Item (Top 10)', committedTopBli)}
+          </div>
+          <div class="execution-chart-row">
+            ${barList('Committed Installment Number Distribution (Row Count)', committedInstallmentDistribution)}
+            ${barList('Committed Payout Type Distribution (Row Count)', committedPayoutDistribution)}
+          </div>
+        </section>
+        <div class="execution-table-row">
+          ${barList('Top Budget Line Items', topBli)}
+          ${interactiveTable({
+            title: 'Detail Rows',
+            tableId: 'execution-detail-rows',
+            rows: filtered,
+            exportName: 'execution-detail-rows.csv',
+            ui: state.ui.tables?.['execution-detail-rows'],
+            columns: detailColumns(filtered),
+            defaultPageSize: 10
+          })}
+        </div>
+      ` : emptyState(rawRowCount)}
+    </div>
   `;
 }
