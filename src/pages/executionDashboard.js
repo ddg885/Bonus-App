@@ -32,6 +32,26 @@ function normalizeStringArray(values = []) {
   return values.map((value) => String(value ?? '')).filter((value) => value !== '');
 }
 
+function normalizePayoutFy(value) {
+  const raw = String(value ?? '').trim().toUpperCase();
+  if (!raw) return '';
+  const fyMatch = raw.match(/^FY\s*([0-9]{2,4})$/);
+  if (fyMatch) {
+    const numeric = Number(fyMatch[1]);
+    if (!Number.isFinite(numeric)) return '';
+    return String(numeric < 100 ? 2000 + numeric : numeric);
+  }
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return '';
+  return String(numeric < 100 ? 2000 + numeric : Math.trunc(numeric));
+}
+
+function formatPayoutFyLabel(value) {
+  const normalized = normalizePayoutFy(value);
+  if (!normalized) return String(value ?? '');
+  return `FY${String(Number(normalized) % 100).padStart(2, '0')}`;
+}
+
 function distinctValues(rows, key) {
   return Array.from(new Set(rows.map((row) => String(row[key] ?? '')).filter((value) => value !== ''))).sort();
 }
@@ -46,10 +66,14 @@ function groupedCount(rows, key) {
 
 function options(values, selected = []) {
   const selectedValues = new Set((Array.isArray(selected) ? selected : []).map((value) => String(value ?? '')));
+  const selectedPayoutFyValues = new Set(Array.from(selectedValues).map((value) => normalizePayoutFy(value)).filter(Boolean));
   return values
     .map((v) => {
       const normalized = String(v ?? '');
-      return `<option value="${normalized}" ${selectedValues.has(normalized) ? 'selected' : ''}>${normalized}</option>`;
+      const payoutFyNormalized = normalizePayoutFy(normalized);
+      const isSelected = selectedValues.has(normalized) || (payoutFyNormalized && selectedPayoutFyValues.has(payoutFyNormalized));
+      const label = payoutFyNormalized ? formatPayoutFyLabel(payoutFyNormalized) : normalized;
+      return `<option value="${normalized}" ${isSelected ? 'selected' : ''}>${label}</option>`;
     })
     .join('');
 }
@@ -72,7 +96,12 @@ function filterSummaryWithClear(values, selected = [], key) {
 
 function activeFilterValue(values) {
   const selectedValues = Array.isArray(values) ? values.map((value) => String(value ?? '')).filter((value) => value !== '') : [];
-  return selectedValues.length ? selectedValues.join(', ') : 'All';
+  if (!selectedValues.length) return 'All';
+  const normalizedPayoutFyValues = selectedValues.map((value) => normalizePayoutFy(value));
+  if (normalizedPayoutFyValues.every(Boolean)) {
+    return normalizedPayoutFyValues.map((value) => formatPayoutFyLabel(value)).join(', ');
+  }
+  return selectedValues.join(', ');
 }
 
 function activeSearchValue(value) {
@@ -118,6 +147,11 @@ function applyFilters(rows, f = {}) {
     const inSet = (k, val) => {
       const selected = Array.isArray(f[k]) ? f[k].map((item) => String(item ?? '')) : [];
       const current = String(val ?? '');
+      if (k === 'payoutFy') {
+        const normalizedSelected = selected.map((item) => normalizePayoutFy(item)).filter(Boolean);
+        const normalizedCurrent = normalizePayoutFy(current);
+        return !normalizedSelected.length || normalizedSelected.includes(normalizedCurrent);
+      }
       return !selected.length || selected.includes(current);
     };
     return matchesSearch
@@ -132,7 +166,7 @@ function applyFilters(rows, f = {}) {
 
 function renderFilter(label, key, allRows, filters) {
   const allValues = key === 'payoutFy'
-    ? distinctValues(allRows, key)
+    ? distinctValues(allRows, key).sort((a, b) => Number(normalizePayoutFy(a)) - Number(normalizePayoutFy(b)))
     : uniq(allRows, key);
   return `<label>${label}<select multiple data-dashboard-filter="${key}">${options(allValues, filters[key])}</select>${filterSummaryWithClear(allValues, filters[key], key)}</label>`;
 }
@@ -167,7 +201,7 @@ export function executionDashboardPage(state) {
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
   const selectedPayoutFy = normalizeStringArray(f.payoutFy);
   const filteredFy26Rows = hasTransformed && selectedPayoutFy.length
-    ? filtered.filter((row) => String(row.payoutFy ?? '') === '2026')
+    ? filtered.filter((row) => normalizePayoutFy(row.payoutFy) === '2026')
     : [];
   const transformedDistinctPayoutFy = distinctValues(transformedRows, 'payoutFy');
   const filteredDistinctPayoutFy = distinctValues(filtered, 'payoutFy');
