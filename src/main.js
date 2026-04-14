@@ -437,10 +437,12 @@ function bindExecutionDashboardActions() {
         ).trim();
         let payoutFY = null;
         let payoutFySource = '';
+        let shiftedDueDate = null;
         if (approvalDate) {
           payoutFY = fyFromDate(approvalDate);
           payoutFySource = 'Approval Date';
         } else if (dueDate) {
+          shiftedDueDate = new Date(dueDate.getTime());
           const shiftedDueDate = new Date(dueDate.getTime());
           shiftedDueDate.setFullYear(shiftedDueDate.getFullYear() + Math.max(0, installNum - 1));
           payoutFY = fyFromDate(shiftedDueDate);
@@ -461,6 +463,7 @@ function bindExecutionDashboardActions() {
           'Payout FY Debug Due Date': dueDate,
           'Payout FY Debug Installment Due Date': installmentDueDate,
           'Payout FY Debug Installment Number': installNum,
+          'Payout FY Debug Shifted Due Date': shiftedDueDate,
           Payout: payout,
           'Installment Number': installNum,
           'Installment Amount': installmentAmount,
@@ -549,7 +552,8 @@ function bindExecutionDashboardActions() {
       'Budget Line Item Grouped', 'Budget Line Item', 'Budget Line Item Combined', 'O_E', 'Current Paygrade', 'Current Rank/Rate', 'Current Rating',
       'Current Designator', 'Due Date', 'Due Date FY', 'Installment Due Date', 'Installment Due FY', 'Approval Date', 'Approval Flag',
       'Affiliation Date', 'Affiliation FY', 'Installment Number', 'Payout', 'Payout FY', 'Payout FY Source', 'Payout FY Debug Approval Date',
-      'Payout FY Debug Due Date', 'Payout FY Debug Installment Due Date', 'Payout FY Debug Installment Number', 'Installment Amount', 'Duty Stat Code',
+      'Payout FY Debug Due Date', 'Payout FY Debug Installment Due Date', 'Payout FY Debug Installment Number', 'Payout FY Debug Shifted Due Date',
+      'Installment Amount', 'Duty Stat Code',
       'Termination Date', 'Termination Reason', 'BonusOrder', 'EventStartDate', 'Bonuses Received Count', 'Bonus Installment Status Ind', 'UIC',
       'Reserve UIC Indicator', 'Bonus Rating', 'Bonus Designator', 'Bonus Rating_Designator', 'Mbr Reserve Bonus Subm Type'
     ];
