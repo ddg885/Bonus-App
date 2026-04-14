@@ -670,9 +670,9 @@ function bindExecutionDashboardActions() {
         issues: [`Rows transformed successfully: ${resultRows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
-      }
+      },
+      dashboard: { filters: {} }
     });
-    resetDashboardFilters();
 
     const uploadInput = document.getElementById('execution-dashboard-upload');
     if (uploadInput) uploadInput.value = '';

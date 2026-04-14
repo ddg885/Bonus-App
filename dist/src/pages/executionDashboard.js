@@ -54,6 +54,16 @@ function filterSummaryWithClear(values, selected = [], key) {
   return `${summary}<a href="#" class="filter-clear-link" data-clear-dashboard-filter="${key}">Clear Filter</a>`;
 }
 
+function activeFilterValue(values) {
+  const selectedValues = Array.isArray(values) ? values.map((value) => String(value ?? '')).filter((value) => value !== '') : [];
+  return selectedValues.length ? selectedValues.join(', ') : 'All';
+}
+
+function activeSearchValue(value) {
+  const trimmed = String(value ?? '').trim();
+  return trimmed ? trimmed : 'Blank';
+}
+
 function getApprovalStatus(row) {
   return String(row.status || row['Approval Flag'] || '').trim().toLowerCase();
 }
@@ -148,7 +158,21 @@ export function executionDashboardPage(state) {
   // Keep all committed KPI/drilldown logic on a single source to avoid hidden subset drift.
   const committedDetailRows = committedRows(filtered);
   const committedAmount = sumAmount(committedDetailRows);
+  const committedVerification = {
+    rows: committedDetailRows.length,
+    amount: committedAmount,
+    payoutFyValues: uniq(committedDetailRows, 'payoutFy')
+  };
   const distinctBonusCount = distinctBonuses(filtered);
+  const activeFilterSummary = [
+    { label: 'Approval Flag', value: activeFilterValue(f.status) },
+    { label: 'Category', value: activeFilterValue(f.category) },
+    { label: 'Budget Line Item', value: activeFilterValue(f.budgetLineItemCombined) },
+    { label: 'O/E', value: activeFilterValue(f.oe) },
+    { label: 'Payout FY', value: activeFilterValue(f.payoutFy) },
+    { label: 'Payout', value: activeFilterValue(f.payoutType) },
+    { label: 'Search', value: activeSearchValue(f.search) }
+  ];
 
   return `
     <div class="execution-dashboard">
@@ -182,6 +206,9 @@ export function executionDashboardPage(state) {
           ${renderFilter('Payout', 'payoutType', transformedRows, f)}
           <label class="dashboard-search-label">Search<input data-dashboard-search type="search" value="${f.search || ''}" placeholder="Search all fields" ${hasTransformed ? '' : 'disabled'} /><button type="button" id="dashboard-clear-all-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear All Filters</button></label>
         </div>
+        <div class="dataset-status">
+          ${activeFilterSummary.map((item) => `<div><strong>${item.label}</strong> <span>${item.value}</span></div>`).join('')}
+        </div>
       </section>
       ${hasTransformed ? `
         <div class="execution-kpi-stack">
@@ -193,6 +220,15 @@ export function executionDashboardPage(state) {
             { label: 'DISTINCT BONUSES', value: distinctBonusCount, subtitle: 'Distinct tracking nums' }
           ])}
         </div>
+        <section class="panel">
+          <h3>Committed KPI Verification (Temporary)</h3>
+          <p class="muted">Verification uses the exact rows behind COMMITTED AMOUNT after all active filters/search are applied.</p>
+          <div class="dataset-status">
+            <div><strong>Committed Detail Rows</strong> <span>${committedVerification.rows}</span></div>
+            <div><strong>Committed Amount Source Sum</strong> <span>${Number(committedVerification.amount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
+            <div><strong>Committed Payout FY Values</strong> <span>${committedVerification.payoutFyValues.join(', ') || '(none)'}</span></div>
+          </div>
+        </section>
         <div class="execution-chart-row">
           ${barList('Amount by Payout FY', payoutFyData)}
           ${barList('Amount by Category', categoryData)}
