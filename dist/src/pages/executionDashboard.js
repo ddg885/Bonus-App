@@ -32,6 +32,26 @@ function normalizeStringArray(values = []) {
   return values.map((value) => String(value ?? '')).filter((value) => value !== '');
 }
 
+function normalizePayoutFy(value) {
+  const raw = String(value ?? '').trim().toUpperCase();
+  if (!raw) return '';
+  const fyMatch = raw.match(/^FY\s*([0-9]{2,4})$/);
+  if (fyMatch) {
+    const numeric = Number(fyMatch[1]);
+    if (!Number.isFinite(numeric)) return '';
+    return String(numeric < 100 ? 2000 + numeric : numeric);
+  }
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) return '';
+  return String(numeric < 100 ? 2000 + numeric : Math.trunc(numeric));
+}
+
+function formatPayoutFyLabel(value) {
+  const normalized = normalizePayoutFy(value);
+  if (!normalized) return String(value ?? '');
+  return `FY${String(Number(normalized) % 100).padStart(2, '0')}`;
+}
+
 function distinctValues(rows, key) {
   return Array.from(new Set(rows.map((row) => String(row[key] ?? '')).filter((value) => value !== ''))).sort();
 }
@@ -46,10 +66,14 @@ function groupedCount(rows, key) {
 
 function options(values, selected = []) {
   const selectedValues = new Set((Array.isArray(selected) ? selected : []).map((value) => String(value ?? '')));
+  const selectedPayoutFyValues = new Set(Array.from(selectedValues).map((value) => normalizePayoutFy(value)).filter(Boolean));
   return values
     .map((v) => {
       const normalized = String(v ?? '');
-      return `<option value="${normalized}" ${selectedValues.has(normalized) ? 'selected' : ''}>${normalized}</option>`;
+      const payoutFyNormalized = normalizePayoutFy(normalized);
+      const isSelected = selectedValues.has(normalized) || (payoutFyNormalized && selectedPayoutFyValues.has(payoutFyNormalized));
+      const label = payoutFyNormalized ? formatPayoutFyLabel(payoutFyNormalized) : normalized;
+      return `<option value="${normalized}" ${isSelected ? 'selected' : ''}>${label}</option>`;
     })
     .join('');
 }
@@ -72,7 +96,12 @@ function filterSummaryWithClear(values, selected = [], key) {
 
 function activeFilterValue(values) {
   const selectedValues = Array.isArray(values) ? values.map((value) => String(value ?? '')).filter((value) => value !== '') : [];
-  return selectedValues.length ? selectedValues.join(', ') : 'All';
+  if (!selectedValues.length) return 'All';
+  const normalizedPayoutFyValues = selectedValues.map((value) => normalizePayoutFy(value));
+  if (normalizedPayoutFyValues.every(Boolean)) {
+    return normalizedPayoutFyValues.map((value) => formatPayoutFyLabel(value)).join(', ');
+  }
+  return selectedValues.join(', ');
 }
 
 function activeSearchValue(value) {
@@ -118,6 +147,11 @@ function applyFilters(rows, f = {}) {
     const inSet = (k, val) => {
       const selected = Array.isArray(f[k]) ? f[k].map((item) => String(item ?? '')) : [];
       const current = String(val ?? '');
+      if (k === 'payoutFy') {
+        const normalizedSelected = selected.map((item) => normalizePayoutFy(item)).filter(Boolean);
+        const normalizedCurrent = normalizePayoutFy(current);
+        return !normalizedSelected.length || normalizedSelected.includes(normalizedCurrent);
+      }
       return !selected.length || selected.includes(current);
     };
     return matchesSearch
@@ -132,7 +166,7 @@ function applyFilters(rows, f = {}) {
 
 function renderFilter(label, key, allRows, filters) {
   const allValues = key === 'payoutFy'
-    ? distinctValues(allRows, key)
+    ? distinctValues(allRows, key).sort((a, b) => Number(normalizePayoutFy(a)) - Number(normalizePayoutFy(b)))
     : uniq(allRows, key);
   return `<label>${label}<select multiple data-dashboard-filter="${key}">${options(allValues, filters[key])}</select>${filterSummaryWithClear(allValues, filters[key], key)}</label>`;
 }
@@ -166,14 +200,25 @@ export function executionDashboardPage(state) {
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
   const selectedPayoutFy = normalizeStringArray(f.payoutFy);
-  const filteredFy26Rows = hasTransformed && selectedPayoutFy.length
-    ? filtered.filter((row) => String(row.payoutFy ?? '') === '2026')
+  const fy26FilterActive = selectedPayoutFy.map((value) => normalizePayoutFy(value)).includes('2026');
+  const filteredFy26Rows = hasTransformed && fy26FilterActive
+    ? filtered.filter((row) => normalizePayoutFy(row.payoutFy) === '2026')
     : [];
   const transformedDistinctPayoutFy = distinctValues(transformedRows, 'payoutFy');
   const filteredDistinctPayoutFy = distinctValues(filtered, 'payoutFy');
   const payoutFyCountsTransformed = sortPayoutFy(groupedCount(transformedRows, 'payoutFy'));
   const payoutFyCountsFiltered = sortPayoutFy(groupedCount(filtered, 'payoutFy'));
+  const payoutFySourceCountsTransformed = sortByValueDesc(groupedCount(transformedRows, 'Payout FY Source'));
+  const payoutFyAmountTransformed = sortPayoutFy(groupedAmount(transformedRows, 'payoutFy'));
   const payoutFySourceCountsFiltered = sortByValueDesc(groupedCount(filtered, 'Payout FY Source'));
+  const suspiciousRows = transformedRows.filter((row) => {
+    const isCommitted = getApprovalStatus(row) === 'committed';
+    const payoutFyIs2026 = normalizePayoutFy(row.payoutFy) === '2026';
+    const dueDateFyIs2026 = String(row['Due Date FY'] ?? '') === '2026';
+    const installmentDueFyIs2026 = String(row['Installment Due FY'] ?? '') === '2026';
+    return isCommitted && !payoutFyIs2026 && (dueDateFyIs2026 || installmentDueFyIs2026);
+  });
+  const fy26DetailRows = fy26FilterActive ? filteredFy26Rows.slice(0, 100) : [];
   const topBli = groupedAmount(filtered, 'budgetLineItemCombined').sort((a, b) => b.value - a.value).slice(0, 10);
   const payoutFyData = sortPayoutFy(groupedAmount(filtered, 'payoutFy'));
   const categoryData = sortByValueDesc(
@@ -239,25 +284,74 @@ export function executionDashboardPage(state) {
       </section>
       ${hasTransformed ? `
         <section class="panel">
-          <h3>Payout FY Verification (Temporary)</h3>
-          <p class="muted">Diagnostics for transformed rows, active filtered rows, and FY26 rows inside the current filtered set when the Payout FY filter is active.</p>
+          <h3>Payout FY Investigation (Temporary)</h3>
+          <p class="muted">Diagnostics prove how Payout FY is assigned in transformed data and which rows are captured when filtering for FY26.</p>
           <div class="dataset-status">
             <div><strong>Transformed Distinct Payout FY</strong> <span>${transformedDistinctPayoutFy.join(', ') || '(none)'}</span></div>
+            <div><strong>Transformed Row Count</strong> <span>${transformedRows.length}</span></div>
+            <div><strong>Transformed Installment Amount</strong> <span>${Number(sumAmount(transformedRows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
             <div><strong>Filtered Distinct Payout FY</strong> <span>${filteredDistinctPayoutFy.join(', ') || '(none)'}</span></div>
             <div><strong>Filtered Row Count</strong> <span>${filtered.length}</span></div>
             <div><strong>Filtered Installment Amount</strong> <span>${Number(installmentAmount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
             <div><strong>Filtered Committed Row Count</strong> <span>${committedDetailRows.length}</span></div>
             <div><strong>Filtered Committed Amount</strong> <span>${Number(committedAmount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
-            <div><strong>FY26 Rows In Current Filtered Set</strong> <span>${selectedPayoutFy.length ? filteredFy26Rows.length : 'N/A (Payout FY filter inactive)'}</span></div>
-            <div><strong>FY26 Amount In Current Filtered Set</strong> <span>${selectedPayoutFy.length ? Number(sumAmount(filteredFy26Rows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : 'N/A (Payout FY filter inactive)'}</span></div>
+            <div><strong>FY26 Rows In Current Filtered Set</strong> <span>${fy26FilterActive ? filteredFy26Rows.length : 'N/A (Payout FY FY26 not selected)'}</span></div>
+            <div><strong>FY26 Amount In Current Filtered Set</strong> <span>${fy26FilterActive ? Number(sumAmount(filteredFy26Rows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : 'N/A (Payout FY FY26 not selected)'}</span></div>
           </div>
           <div class="execution-chart-row">
             ${barList('Counts by Payout FY (Transformed)', payoutFyCountsTransformed)}
+            ${barList('Amounts by Payout FY (Transformed)', payoutFyAmountTransformed)}
+          </div>
+          <div class="execution-chart-row">
             ${barList('Counts by Payout FY (Filtered)', payoutFyCountsFiltered)}
+            ${barList('Counts by Payout FY Source (Transformed)', payoutFySourceCountsTransformed)}
           </div>
           <div class="execution-chart-row">
             ${barList('Counts by Payout FY Source (Filtered)', payoutFySourceCountsFiltered)}
           </div>
+          ${interactiveTable({
+            title: fy26FilterActive ? 'FY26 Filtered Row Sample (First 100)' : 'FY26 Filtered Row Sample (Select FY26 to populate)',
+            tableId: 'execution-fy26-investigation-rows',
+            rows: fy26FilterActive ? fy26DetailRows : [],
+            exportName: 'execution-fy26-investigation-rows.csv',
+            ui: state.ui.tables?.['execution-fy26-investigation-rows'],
+            columns: [
+              { key: 'Bonus Tracking Num', label: 'Bonus Tracking Num' },
+              { key: 'Approval Flag', label: 'Approval Flag' },
+              { key: 'Payout FY', label: 'Payout FY' },
+              { key: 'Payout FY Source', label: 'Payout FY Source' },
+              { key: 'Approval Date', label: 'Approval Date' },
+              { key: 'Due Date', label: 'Due Date' },
+              { key: 'Installment Due Date', label: 'Installment Due Date' },
+              { key: 'Installment Number', label: 'Installment Number' },
+              { key: 'Installment Amount', label: 'Installment Amount' },
+              { key: 'Mbr Reserve Bonus Subm Category Code', label: 'Mbr Reserve Bonus Subm Category Code' },
+              { key: 'Budget Line Item Combined', label: 'Budget Line Item Combined' }
+            ],
+            defaultPageSize: 100
+          })}
+          ${interactiveTable({
+            title: 'Suspicious Committed Rows (Payout FY ≠ 2026, but Due Date FY or Installment Due FY = 2026)',
+            tableId: 'execution-fy26-suspicious-rows',
+            rows: suspiciousRows,
+            exportName: 'execution-fy26-suspicious-rows.csv',
+            ui: state.ui.tables?.['execution-fy26-suspicious-rows'],
+            columns: [
+              { key: 'Bonus Tracking Num', label: 'Bonus Tracking Num' },
+              { key: 'Approval Flag', label: 'Approval Flag' },
+              { key: 'Payout FY', label: 'Payout FY' },
+              { key: 'Payout FY Source', label: 'Payout FY Source' },
+              { key: 'Due Date FY', label: 'Due Date FY' },
+              { key: 'Installment Due FY', label: 'Installment Due FY' },
+              { key: 'Due Date', label: 'Due Date' },
+              { key: 'Installment Due Date', label: 'Installment Due Date' },
+              { key: 'Installment Number', label: 'Installment Number' },
+              { key: 'Installment Amount', label: 'Installment Amount' },
+              { key: 'Mbr Reserve Bonus Subm Category Code', label: 'Mbr Reserve Bonus Subm Category Code' },
+              { key: 'Budget Line Item Combined', label: 'Budget Line Item Combined' }
+            ],
+            defaultPageSize: 25
+          })}
         </section>
         <div class="execution-kpi-stack">
           ${metricCards([

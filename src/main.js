@@ -459,6 +459,7 @@ function bindExecutionDashboardActions() {
           'Payout FY Source': payoutFySource,
           'Payout FY Debug Approval Date': approvalDate,
           'Payout FY Debug Due Date': dueDate,
+          'Payout FY Debug Installment Due Date': installmentDueDate,
           'Payout FY Debug Installment Number': installNum,
           Payout: payout,
           'Installment Number': installNum,
@@ -548,9 +549,9 @@ function bindExecutionDashboardActions() {
       'Budget Line Item Grouped', 'Budget Line Item', 'Budget Line Item Combined', 'O_E', 'Current Paygrade', 'Current Rank/Rate', 'Current Rating',
       'Current Designator', 'Due Date', 'Due Date FY', 'Installment Due Date', 'Installment Due FY', 'Approval Date', 'Approval Flag',
       'Affiliation Date', 'Affiliation FY', 'Installment Number', 'Payout', 'Payout FY', 'Payout FY Source', 'Payout FY Debug Approval Date',
-      'Payout FY Debug Due Date', 'Payout FY Debug Installment Number', 'Installment Amount', 'Duty Stat Code', 'Termination Date',
-      'Termination Reason', 'BonusOrder', 'EventStartDate', 'Bonuses Received Count', 'Bonus Installment Status Ind', 'UIC', 'Reserve UIC Indicator',
-      'Bonus Rating', 'Bonus Designator', 'Bonus Rating_Designator', 'Mbr Reserve Bonus Subm Type'
+      'Payout FY Debug Due Date', 'Payout FY Debug Installment Due Date', 'Payout FY Debug Installment Number', 'Installment Amount', 'Duty Stat Code',
+      'Termination Date', 'Termination Reason', 'BonusOrder', 'EventStartDate', 'Bonuses Received Count', 'Bonus Installment Status Ind', 'UIC',
+      'Reserve UIC Indicator', 'Bonus Rating', 'Bonus Designator', 'Bonus Rating_Designator', 'Mbr Reserve Bonus Subm Type'
     ];
     return withDerivedFields.map((row) => {
       const key = row['Budget Line Item Grouped'] || '(blank)';
