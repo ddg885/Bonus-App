@@ -199,26 +199,19 @@ export function executionDashboardPage(state) {
   const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
-  const selectedPayoutFy = normalizeStringArray(f.payoutFy);
-  const fy26FilterActive = selectedPayoutFy.map((value) => normalizePayoutFy(value)).includes('2026');
-  const filteredFy26Rows = hasTransformed && fy26FilterActive
-    ? filtered.filter((row) => normalizePayoutFy(row.payoutFy) === '2026')
-    : [];
-  const transformedDistinctPayoutFy = distinctValues(transformedRows, 'payoutFy');
-  const filteredDistinctPayoutFy = distinctValues(filtered, 'payoutFy');
-  const payoutFyCountsTransformed = sortPayoutFy(groupedCount(transformedRows, 'payoutFy'));
-  const payoutFyCountsFiltered = sortPayoutFy(groupedCount(filtered, 'payoutFy'));
-  const payoutFySourceCountsTransformed = sortByValueDesc(groupedCount(transformedRows, 'Payout FY Source'));
-  const payoutFyAmountTransformed = sortPayoutFy(groupedAmount(transformedRows, 'payoutFy'));
-  const payoutFySourceCountsFiltered = sortByValueDesc(groupedCount(filtered, 'Payout FY Source'));
-  const suspiciousRows = transformedRows.filter((row) => {
-    const isCommitted = getApprovalStatus(row) === 'committed';
-    const payoutFyIs2026 = normalizePayoutFy(row.payoutFy) === '2026';
+  const committedAuditRows = transformedRows
+    .filter((row) => getApprovalStatus(row) === 'committed')
+    .map((row) => ({
+      ...row,
+      'Budget Line Item Combined': row['Budget Line Item Combined'] || row.budgetLineItemCombined || row['Budget Line Item'] || row.budgetLineItem || ''
+    }));
+  const committedAuditFy26Rows = committedAuditRows.filter((row) => normalizePayoutFy(row['Payout FY'] ?? row.payoutFy) === '2026');
+  const committedNearFy26NotAssignedRows = committedAuditRows.filter((row) => {
+    const payoutFyIs2026 = normalizePayoutFy(row['Payout FY'] ?? row.payoutFy) === '2026';
     const dueDateFyIs2026 = String(row['Due Date FY'] ?? '') === '2026';
     const installmentDueFyIs2026 = String(row['Installment Due FY'] ?? '') === '2026';
-    return isCommitted && !payoutFyIs2026 && (dueDateFyIs2026 || installmentDueFyIs2026);
+    return !payoutFyIs2026 && (dueDateFyIs2026 || installmentDueFyIs2026);
   });
-  const fy26DetailRows = fy26FilterActive ? filteredFy26Rows.slice(0, 100) : [];
   const topBli = groupedAmount(filtered, 'budgetLineItemCombined').sort((a, b) => b.value - a.value).slice(0, 10);
   const payoutFyData = sortPayoutFy(groupedAmount(filtered, 'payoutFy'));
   const categoryData = sortByValueDesc(
@@ -284,46 +277,34 @@ export function executionDashboardPage(state) {
       </section>
       ${hasTransformed ? `
         <section class="panel">
-          <h3>Payout FY Investigation (Temporary)</h3>
-          <p class="muted">Diagnostics prove how Payout FY is assigned in transformed data and which rows are captured when filtering for FY26.</p>
+          <h3>Committed Payout FY Audit</h3>
+          <p class="muted">Temporary audit workflow to inspect committed payout FY assignment at row level and isolate FY26 discrepancies.</p>
           <div class="dataset-status">
-            <div><strong>Transformed Distinct Payout FY</strong> <span>${transformedDistinctPayoutFy.join(', ') || '(none)'}</span></div>
-            <div><strong>Transformed Row Count</strong> <span>${transformedRows.length}</span></div>
-            <div><strong>Transformed Installment Amount</strong> <span>${Number(sumAmount(transformedRows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
-            <div><strong>Filtered Distinct Payout FY</strong> <span>${filteredDistinctPayoutFy.join(', ') || '(none)'}</span></div>
-            <div><strong>Filtered Row Count</strong> <span>${filtered.length}</span></div>
-            <div><strong>Filtered Installment Amount</strong> <span>${Number(installmentAmount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
-            <div><strong>Filtered Committed Row Count</strong> <span>${committedDetailRows.length}</span></div>
-            <div><strong>Filtered Committed Amount</strong> <span>${Number(committedAmount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
-            <div><strong>FY26 Rows In Current Filtered Set</strong> <span>${fy26FilterActive ? filteredFy26Rows.length : 'N/A (Payout FY FY26 not selected)'}</span></div>
-            <div><strong>FY26 Amount In Current Filtered Set</strong> <span>${fy26FilterActive ? Number(sumAmount(filteredFy26Rows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : 'N/A (Payout FY FY26 not selected)'}</span></div>
-          </div>
-          <div class="execution-chart-row">
-            ${barList('Counts by Payout FY (Transformed)', payoutFyCountsTransformed)}
-            ${barList('Amounts by Payout FY (Transformed)', payoutFyAmountTransformed)}
-          </div>
-          <div class="execution-chart-row">
-            ${barList('Counts by Payout FY (Filtered)', payoutFyCountsFiltered)}
-            ${barList('Counts by Payout FY Source (Transformed)', payoutFySourceCountsTransformed)}
-          </div>
-          <div class="execution-chart-row">
-            ${barList('Counts by Payout FY Source (Filtered)', payoutFySourceCountsFiltered)}
+            <div><strong>All Committed Rows</strong> <span>${committedAuditRows.length}</span></div>
+            <div><strong>All Committed Amount</strong> <span>${Number(sumAmount(committedAuditRows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
+            <div><strong>Committed Rows with Payout FY = 2026</strong> <span>${committedAuditFy26Rows.length}</span></div>
+            <div><strong>Committed Amount with Payout FY = 2026</strong> <span>${Number(sumAmount(committedAuditFy26Rows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
+            <div><strong>Committed Rows Expected Near FY26 But Not Assigned FY26</strong> <span>${committedNearFy26NotAssignedRows.length}</span></div>
+            <div><strong>Expected Near FY26 But Not Assigned Amount</strong> <span>${Number(sumAmount(committedNearFy26NotAssignedRows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
           </div>
           ${interactiveTable({
-            title: fy26FilterActive ? 'FY26 Filtered Row Sample (First 100)' : 'FY26 Filtered Row Sample (Select FY26 to populate)',
-            tableId: 'execution-fy26-investigation-rows',
-            rows: fy26FilterActive ? fy26DetailRows : [],
-            exportName: 'execution-fy26-investigation-rows.csv',
-            ui: state.ui.tables?.['execution-fy26-investigation-rows'],
+            title: 'Committed Payout FY Audit Rows',
+            tableId: 'execution-committed-payout-fy-audit-rows',
+            rows: committedAuditRows,
+            exportName: 'execution-committed-payout-fy-audit-rows.csv',
+            ui: state.ui.tables?.['execution-committed-payout-fy-audit-rows'],
             columns: [
               { key: 'Bonus Tracking Num', label: 'Bonus Tracking Num' },
               { key: 'Approval Flag', label: 'Approval Flag' },
               { key: 'Payout FY', label: 'Payout FY' },
               { key: 'Payout FY Source', label: 'Payout FY Source' },
-              { key: 'Approval Date', label: 'Approval Date' },
-              { key: 'Due Date', label: 'Due Date' },
-              { key: 'Installment Due Date', label: 'Installment Due Date' },
-              { key: 'Installment Number', label: 'Installment Number' },
+              { key: 'Payout FY Debug Approval Date', label: 'Payout FY Debug Approval Date' },
+              { key: 'Payout FY Debug Due Date', label: 'Payout FY Debug Due Date' },
+              { key: 'Payout FY Debug Installment Due Date', label: 'Payout FY Debug Installment Due Date' },
+              { key: 'Payout FY Debug Shifted Due Date', label: 'Payout FY Debug Shifted Due Date' },
+              { key: 'Payout FY Debug Installment Number', label: 'Payout FY Debug Installment Number' },
+              { key: 'Due Date FY', label: 'Due Date FY' },
+              { key: 'Installment Due FY', label: 'Installment Due FY' },
               { key: 'Installment Amount', label: 'Installment Amount' },
               { key: 'Mbr Reserve Bonus Subm Category Code', label: 'Mbr Reserve Bonus Subm Category Code' },
               { key: 'Budget Line Item Combined', label: 'Budget Line Item Combined' }
@@ -331,26 +312,28 @@ export function executionDashboardPage(state) {
             defaultPageSize: 100
           })}
           ${interactiveTable({
-            title: 'Suspicious Committed Rows (Payout FY ≠ 2026, but Due Date FY or Installment Due FY = 2026)',
-            tableId: 'execution-fy26-suspicious-rows',
-            rows: suspiciousRows,
-            exportName: 'execution-fy26-suspicious-rows.csv',
-            ui: state.ui.tables?.['execution-fy26-suspicious-rows'],
+            title: 'Committed Rows Expected Near FY26 But Not Assigned FY26',
+            tableId: 'execution-committed-near-fy26-not-assigned-rows',
+            rows: committedNearFy26NotAssignedRows,
+            exportName: 'execution-committed-near-fy26-not-assigned-rows.csv',
+            ui: state.ui.tables?.['execution-committed-near-fy26-not-assigned-rows'],
             columns: [
               { key: 'Bonus Tracking Num', label: 'Bonus Tracking Num' },
               { key: 'Approval Flag', label: 'Approval Flag' },
               { key: 'Payout FY', label: 'Payout FY' },
               { key: 'Payout FY Source', label: 'Payout FY Source' },
+              { key: 'Payout FY Debug Approval Date', label: 'Payout FY Debug Approval Date' },
+              { key: 'Payout FY Debug Due Date', label: 'Payout FY Debug Due Date' },
+              { key: 'Payout FY Debug Installment Due Date', label: 'Payout FY Debug Installment Due Date' },
+              { key: 'Payout FY Debug Shifted Due Date', label: 'Payout FY Debug Shifted Due Date' },
+              { key: 'Payout FY Debug Installment Number', label: 'Payout FY Debug Installment Number' },
               { key: 'Due Date FY', label: 'Due Date FY' },
               { key: 'Installment Due FY', label: 'Installment Due FY' },
-              { key: 'Due Date', label: 'Due Date' },
-              { key: 'Installment Due Date', label: 'Installment Due Date' },
-              { key: 'Installment Number', label: 'Installment Number' },
               { key: 'Installment Amount', label: 'Installment Amount' },
               { key: 'Mbr Reserve Bonus Subm Category Code', label: 'Mbr Reserve Bonus Subm Category Code' },
               { key: 'Budget Line Item Combined', label: 'Budget Line Item Combined' }
             ],
-            defaultPageSize: 25
+            defaultPageSize: 100
           })}
         </section>
         <div class="execution-kpi-stack">
