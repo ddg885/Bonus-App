@@ -443,6 +443,7 @@ function bindExecutionDashboardActions() {
           payoutFySource = 'Approval Date';
         } else if (dueDate) {
           shiftedDueDate = new Date(dueDate.getTime());
+          const shiftedDueDate = new Date(dueDate.getTime());
           shiftedDueDate.setFullYear(shiftedDueDate.getFullYear() + Math.max(0, installNum - 1));
           payoutFY = fyFromDate(shiftedDueDate);
           payoutFySource = 'Due Date + Installment Number - 1 years';
