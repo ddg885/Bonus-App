@@ -441,10 +441,10 @@ function bindExecutionDashboardActions() {
           payoutFY = fyFromDate(approvalDate);
           payoutFySource = 'Approval Date';
         } else if (dueDate) {
-          payoutFY = dueDate.getMonth() + 1 >= 10
-            ? dueDate.getFullYear() + installNum
-            : dueDate.getFullYear() + (installNum - 1);
-          payoutFySource = 'Due Date + Installment Number';
+          const shiftedDueDate = new Date(dueDate.getTime());
+          shiftedDueDate.setFullYear(shiftedDueDate.getFullYear() + Math.max(0, installNum - 1));
+          payoutFY = fyFromDate(shiftedDueDate);
+          payoutFySource = 'Due Date + Installment Number - 1 years';
         }
 
         return {
