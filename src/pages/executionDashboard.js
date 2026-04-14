@@ -28,6 +28,22 @@ function sortByValueDesc(data) {
   return [...data].sort((a, b) => b.value - a.value);
 }
 
+function normalizeStringArray(values = []) {
+  return values.map((value) => String(value ?? '')).filter((value) => value !== '');
+}
+
+function distinctValues(rows, key) {
+  return Array.from(new Set(rows.map((row) => String(row[key] ?? '')).filter((value) => value !== ''))).sort();
+}
+
+function groupedCount(rows, key) {
+  return Object.entries(rows.reduce((acc, row) => {
+    const bucket = String(row[key] ?? '').trim() || 'UNKNOWN';
+    acc[bucket] = (acc[bucket] || 0) + 1;
+    return acc;
+  }, {})).map(([label, value]) => ({ label, value }));
+}
+
 function options(values, selected = []) {
   const selectedValues = new Set((Array.isArray(selected) ? selected : []).map((value) => String(value ?? '')));
   return values
@@ -115,7 +131,9 @@ function applyFilters(rows, f = {}) {
 }
 
 function renderFilter(label, key, allRows, filters) {
-  const allValues = uniq(allRows, key);
+  const allValues = key === 'payoutFy'
+    ? distinctValues(allRows, key)
+    : uniq(allRows, key);
   return `<label>${label}<select multiple data-dashboard-filter="${key}">${options(allValues, filters[key])}</select>${filterSummaryWithClear(allValues, filters[key], key)}</label>`;
 }
 
@@ -147,6 +165,15 @@ export function executionDashboardPage(state) {
   const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
+  const selectedPayoutFy = normalizeStringArray(f.payoutFy);
+  const filteredFy26Rows = hasTransformed && selectedPayoutFy.length
+    ? filtered.filter((row) => String(row.payoutFy ?? '') === '2026')
+    : [];
+  const transformedDistinctPayoutFy = distinctValues(transformedRows, 'payoutFy');
+  const filteredDistinctPayoutFy = distinctValues(filtered, 'payoutFy');
+  const payoutFyCountsTransformed = sortPayoutFy(groupedCount(transformedRows, 'payoutFy'));
+  const payoutFyCountsFiltered = sortPayoutFy(groupedCount(filtered, 'payoutFy'));
+  const payoutFySourceCountsFiltered = sortByValueDesc(groupedCount(filtered, 'Payout FY Source'));
   const topBli = groupedAmount(filtered, 'budgetLineItemCombined').sort((a, b) => b.value - a.value).slice(0, 10);
   const payoutFyData = sortPayoutFy(groupedAmount(filtered, 'payoutFy'));
   const categoryData = sortByValueDesc(
@@ -211,6 +238,27 @@ export function executionDashboardPage(state) {
         </div>
       </section>
       ${hasTransformed ? `
+        <section class="panel">
+          <h3>Payout FY Verification (Temporary)</h3>
+          <p class="muted">Diagnostics for transformed rows, active filtered rows, and FY26 rows inside the current filtered set when the Payout FY filter is active.</p>
+          <div class="dataset-status">
+            <div><strong>Transformed Distinct Payout FY</strong> <span>${transformedDistinctPayoutFy.join(', ') || '(none)'}</span></div>
+            <div><strong>Filtered Distinct Payout FY</strong> <span>${filteredDistinctPayoutFy.join(', ') || '(none)'}</span></div>
+            <div><strong>Filtered Row Count</strong> <span>${filtered.length}</span></div>
+            <div><strong>Filtered Installment Amount</strong> <span>${Number(installmentAmount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
+            <div><strong>Filtered Committed Row Count</strong> <span>${committedDetailRows.length}</span></div>
+            <div><strong>Filtered Committed Amount</strong> <span>${Number(committedAmount || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span></div>
+            <div><strong>FY26 Rows In Current Filtered Set</strong> <span>${selectedPayoutFy.length ? filteredFy26Rows.length : 'N/A (Payout FY filter inactive)'}</span></div>
+            <div><strong>FY26 Amount In Current Filtered Set</strong> <span>${selectedPayoutFy.length ? Number(sumAmount(filteredFy26Rows) || 0).toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : 'N/A (Payout FY filter inactive)'}</span></div>
+          </div>
+          <div class="execution-chart-row">
+            ${barList('Counts by Payout FY (Transformed)', payoutFyCountsTransformed)}
+            ${barList('Counts by Payout FY (Filtered)', payoutFyCountsFiltered)}
+          </div>
+          <div class="execution-chart-row">
+            ${barList('Counts by Payout FY Source (Filtered)', payoutFySourceCountsFiltered)}
+          </div>
+        </section>
         <div class="execution-kpi-stack">
           ${metricCards([
             { label: 'VISIBLE ROWS', value: visibleRows, subtitle: 'After filters' },
