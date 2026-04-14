@@ -54,6 +54,16 @@ function filterSummaryWithClear(values, selected = [], key) {
   return `${summary}<a href="#" class="filter-clear-link" data-clear-dashboard-filter="${key}">Clear Filter</a>`;
 }
 
+function activeFilterValue(values) {
+  const selectedValues = Array.isArray(values) ? values.map((value) => String(value ?? '')).filter((value) => value !== '') : [];
+  return selectedValues.length ? selectedValues.join(', ') : 'All';
+}
+
+function activeSearchValue(value) {
+  const trimmed = String(value ?? '').trim();
+  return trimmed ? trimmed : 'Blank';
+}
+
 function getApprovalStatus(row) {
   return String(row.status || row['Approval Flag'] || '').trim().toLowerCase();
 }
@@ -154,6 +164,15 @@ export function executionDashboardPage(state) {
     payoutFyValues: uniq(committedDetailRows, 'payoutFy')
   };
   const distinctBonusCount = distinctBonuses(filtered);
+  const activeFilterSummary = [
+    { label: 'Approval Flag', value: activeFilterValue(f.status) },
+    { label: 'Category', value: activeFilterValue(f.category) },
+    { label: 'Budget Line Item', value: activeFilterValue(f.budgetLineItemCombined) },
+    { label: 'O/E', value: activeFilterValue(f.oe) },
+    { label: 'Payout FY', value: activeFilterValue(f.payoutFy) },
+    { label: 'Payout', value: activeFilterValue(f.payoutType) },
+    { label: 'Search', value: activeSearchValue(f.search) }
+  ];
 
   return `
     <div class="execution-dashboard">
@@ -186,6 +205,9 @@ export function executionDashboardPage(state) {
           ${renderFilter('Payout FY', 'payoutFy', transformedRows, f)}
           ${renderFilter('Payout', 'payoutType', transformedRows, f)}
           <label class="dashboard-search-label">Search<input data-dashboard-search type="search" value="${f.search || ''}" placeholder="Search all fields" ${hasTransformed ? '' : 'disabled'} /><button type="button" id="dashboard-clear-all-filters" class="secondary-btn" ${hasTransformed ? '' : 'disabled'}>Clear All Filters</button></label>
+        </div>
+        <div class="dataset-status">
+          ${activeFilterSummary.map((item) => `<div><strong>${item.label}</strong> <span>${item.value}</span></div>`).join('')}
         </div>
       </section>
       ${hasTransformed ? `
