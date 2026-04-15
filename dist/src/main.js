@@ -638,7 +638,7 @@ function bindExecutionDashboardActions() {
     const dashboardState = store.state.ui?.executionDashboard || {};
     if (!file) {
       setExecutionUploadError(dashboardState, 'No file selected. Choose a Bonus Execution file to continue.');
-      return;
+      return false;
     }
     try {
       const rows = await parseExecutionFile(file);
@@ -659,6 +659,7 @@ function bindExecutionDashboardActions() {
     const dashboardState = store.state.ui?.executionDashboard || {};
     const runtimeState = getRuntimeDashboardState();
     const rawRows = runtimeState.rawRows || [];
+    console.log('Transform button clicked', { rawRowCount: rawRows.length });
     if (!rawRows.length) {
       store.patchUi({
         executionDashboard: {
@@ -698,21 +699,28 @@ function bindExecutionDashboardActions() {
   app.dataset.executionDashboardActionsBound = 'true';
 
   app.addEventListener('change', async (event) => {
-    const uploadInput = event.target?.closest?.('#execution-dashboard-upload');
-    if (!uploadInput) return;
-    const file = uploadInput.files?.[0];
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.id !== 'execution-dashboard-upload') return;
+    const file = target.files?.[0];
     await handleExecutionFileSelected(file);
+    target.value = '';
   });
 
   app.addEventListener('click', (event) => {
-    const transformBtn = event.target?.closest?.('#execution-transform-btn');
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const transformBtn = target.closest('#execution-transform-btn');
     if (transformBtn) {
+      event.preventDefault();
       handleTransformExecutionData();
       return;
     }
 
-    const clearFiltersBtn = event.target?.closest?.('#dashboard-clear-filters');
+    const clearFiltersBtn = target.closest('#dashboard-clear-filters');
     if (clearFiltersBtn) {
+      event.preventDefault();
       resetDashboardFilters();
     }
   });

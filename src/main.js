@@ -659,6 +659,7 @@ function bindExecutionDashboardActions() {
     const dashboardState = store.state.ui?.executionDashboard || {};
     const runtimeState = getRuntimeDashboardState();
     const rawRows = runtimeState.rawRows || [];
+    console.log('Transform button clicked', { rawRowCount: rawRows.length });
     if (!rawRows.length) {
       store.patchUi({
         executionDashboard: {
@@ -697,28 +698,13 @@ function bindExecutionDashboardActions() {
   if (!app || app.dataset.executionDashboardActionsBound === 'true') return;
   app.dataset.executionDashboardActionsBound = 'true';
 
-  const resolveExecutionUploadInput = (event) => {
-    const target = event.target;
-    if (target instanceof HTMLInputElement && target.id === 'execution-dashboard-upload') return target;
-    if (target instanceof Element) {
-      const nestedInput = target.closest('#execution-dashboard-upload');
-      if (nestedInput instanceof HTMLInputElement) return nestedInput;
-    }
-    if (typeof event.composedPath === 'function') {
-      const inputFromPath = event.composedPath().find(
-        (node) => node instanceof HTMLInputElement && node.id === 'execution-dashboard-upload'
-      );
-      if (inputFromPath instanceof HTMLInputElement) return inputFromPath;
-    }
-    return null;
-  };
-
   app.addEventListener('change', async (event) => {
-    const uploadInput = resolveExecutionUploadInput(event);
-    if (!uploadInput) return;
-    const file = uploadInput.files?.[0];
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    if (target.id !== 'execution-dashboard-upload') return;
+    const file = target.files?.[0];
     await handleExecutionFileSelected(file);
-    uploadInput.value = '';
+    target.value = '';
   });
 
   app.addEventListener('click', (event) => {
@@ -727,12 +713,14 @@ function bindExecutionDashboardActions() {
 
     const transformBtn = target.closest('#execution-transform-btn');
     if (transformBtn) {
+      event.preventDefault();
       handleTransformExecutionData();
       return;
     }
 
     const clearFiltersBtn = target.closest('#dashboard-clear-filters');
     if (clearFiltersBtn) {
+      event.preventDefault();
       resetDashboardFilters();
     }
   });
