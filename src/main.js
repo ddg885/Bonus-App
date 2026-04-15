@@ -638,7 +638,7 @@ function bindExecutionDashboardActions() {
     const dashboardState = store.state.ui?.executionDashboard || {};
     if (!file) {
       setExecutionUploadError(dashboardState, 'No file selected. Choose a Bonus Execution file to continue.');
-      return;
+      return false;
     }
     try {
       const rows = await parseExecutionFile(file);
@@ -697,21 +697,41 @@ function bindExecutionDashboardActions() {
   if (!app || app.dataset.executionDashboardActionsBound === 'true') return;
   app.dataset.executionDashboardActionsBound = 'true';
 
+  const resolveExecutionUploadInput = (event) => {
+    const target = event.target;
+    if (target instanceof HTMLInputElement && target.id === 'execution-dashboard-upload') return target;
+    if (target instanceof Element) {
+      const nestedInput = target.closest('#execution-dashboard-upload');
+      if (nestedInput instanceof HTMLInputElement) return nestedInput;
+    }
+    if (typeof event.composedPath === 'function') {
+      const inputFromPath = event.composedPath().find(
+        (node) => node instanceof HTMLInputElement && node.id === 'execution-dashboard-upload'
+      );
+      if (inputFromPath instanceof HTMLInputElement) return inputFromPath;
+    }
+    return null;
+  };
+
   app.addEventListener('change', async (event) => {
-    const uploadInput = event.target?.closest?.('#execution-dashboard-upload');
+    const uploadInput = resolveExecutionUploadInput(event);
     if (!uploadInput) return;
     const file = uploadInput.files?.[0];
     await handleExecutionFileSelected(file);
+    uploadInput.value = '';
   });
 
   app.addEventListener('click', (event) => {
-    const transformBtn = event.target?.closest?.('#execution-transform-btn');
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const transformBtn = target.closest('#execution-transform-btn');
     if (transformBtn) {
       handleTransformExecutionData();
       return;
     }
 
-    const clearFiltersBtn = event.target?.closest?.('#dashboard-clear-filters');
+    const clearFiltersBtn = target.closest('#dashboard-clear-filters');
     if (clearFiltersBtn) {
       resetDashboardFilters();
     }
