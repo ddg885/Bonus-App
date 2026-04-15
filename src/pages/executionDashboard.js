@@ -193,9 +193,10 @@ export function executionDashboardPage(state) {
   const rawRows = runtimeState.rawRows || [];
   const transformedRows = runtimeState.transformedRows || [];
   const hasTransformed = Boolean(dashboardState.hasTransformed && transformedRows.length);
-  const rawRowCount = hasTransformed ? Number(dashboardState.rawRowCount || rawRows.length || 0) : 0;
+  const rawRowCount = hasTransformed ? Number(dashboardState.rawRowCount || rawRows.length || 0) : Number(rawRows.length || 0);
   const transformedRowCount = hasTransformed ? Number(dashboardState.transformedRowCount || transformedRows.length || 0) : 0;
-  const fileName = hasTransformed ? (dashboardState.fileName || '') : '';
+  const fileName = hasTransformed ? (dashboardState.fileName || '') : (runtimeState.pendingFileName || '');
+  const uploadStatus = dashboardState.uploadStatus || '';
   const issues = dashboardState.issues || [];
   const f = state.ui.dashboard?.filters || {};
   const filtered = hasTransformed ? applyFilters(transformedRows, f) : [];
@@ -256,6 +257,7 @@ export function executionDashboardPage(state) {
           <div><strong>Raw Rows Loaded</strong> <span>${rawRowCount}</span></div>
           <div><strong>Transformed Rows</strong> <span>${transformedRowCount}</span></div>
         </div>
+        ${uploadStatus ? `<p class="muted">${uploadStatus}</p>` : ''}
         ${issues.length ? `<p class="danger">${issues.map((issue) => (typeof issue === 'string' ? issue : issue?.message || JSON.stringify(issue))).join(' | ')}</p>` : ''}
         <p class="muted">This page only supports Bonus Execution data. Upload only stores raw rows; dashboard metrics/charts render after you click Transform Data.</p>
       </section>

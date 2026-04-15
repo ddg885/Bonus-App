@@ -252,10 +252,11 @@ function bindExecutionDashboardActions() {
     setExecutionDashboardState({
       ...dashboardState,
       fileName: '',
-      rawRowCount: 0,
+      rawRowCount: rows.length,
       transformedRowCount: 0,
       hasTransformed: false,
       transformedAt: null,
+      uploadStatus: `Execution upload parsed successfully: ${rows.length} raw rows loaded`,
       issues: []
     });
   };
@@ -274,6 +275,7 @@ function bindExecutionDashboardActions() {
       transformedRowCount: 0,
       hasTransformed: false,
       transformedAt: null,
+      uploadStatus: '',
       issues: [error]
     });
   };
@@ -680,6 +682,7 @@ function bindExecutionDashboardActions() {
         fileName: runtimeState.pendingFileName || '',
         rawRowCount: rawRows.length,
         transformedRowCount: resultRows.length,
+        uploadStatus: '',
         issues: [`Rows transformed successfully: ${resultRows.length}`],
         hasTransformed: true,
         transformedAt: new Date().toISOString()
@@ -691,25 +694,28 @@ function bindExecutionDashboardActions() {
     if (uploadInput) uploadInput.value = '';
   };
 
-  const uploadInput = document.getElementById('execution-dashboard-upload');
-  if (uploadInput) {
-    uploadInput.addEventListener('change', async (e) => {
-      const file = e.target.files?.[0];
-      await handleExecutionFileSelected(file);
-    });
-  }
+  if (!app || app.dataset.executionDashboardActionsBound === 'true') return;
+  app.dataset.executionDashboardActionsBound = 'true';
 
-  const transformBtn = document.getElementById('execution-transform-btn');
-  if (transformBtn) {
-    transformBtn.addEventListener('click', handleTransformExecutionData);
-  }
+  app.addEventListener('change', async (event) => {
+    const uploadInput = event.target?.closest?.('#execution-dashboard-upload');
+    if (!uploadInput) return;
+    const file = uploadInput.files?.[0];
+    await handleExecutionFileSelected(file);
+  });
 
-  const clearFiltersBtn = document.getElementById('dashboard-clear-filters');
-  if (clearFiltersBtn) {
-    clearFiltersBtn.addEventListener('click', () => {
+  app.addEventListener('click', (event) => {
+    const transformBtn = event.target?.closest?.('#execution-transform-btn');
+    if (transformBtn) {
+      handleTransformExecutionData();
+      return;
+    }
+
+    const clearFiltersBtn = event.target?.closest?.('#dashboard-clear-filters');
+    if (clearFiltersBtn) {
       resetDashboardFilters();
-    });
-  }
+    }
+  });
 }
 
 function bindDashboardFilters() {
